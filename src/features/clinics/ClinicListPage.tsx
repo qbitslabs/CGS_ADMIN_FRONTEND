@@ -286,6 +286,7 @@ export const ClinicListPage: React.FC = () => {
 
       {/* Clinics Table */}
       <DataTable
+        exportName="clinics"
         columns={columns}
         data={data?.data || []}
         isLoading={isLoading}

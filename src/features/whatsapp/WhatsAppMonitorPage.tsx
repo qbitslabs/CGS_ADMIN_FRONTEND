@@ -7,6 +7,7 @@ import { whatsappApi } from '../../api/whatsapp.api';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { formatDateTime } from '../../utils/formatters';
+import { ExportExcelButton } from '../../components/ui/ExportExcelButton';
 
 export const WhatsAppMonitorPage: React.FC = () => {
   const { data: items = [] } = useQuery({
@@ -49,7 +50,28 @@ export const WhatsAppMonitorPage: React.FC = () => {
       </div>
 
       {/* WhatsApp Health Table */}
-      <Card title="Active Meta WABA Accounts" subtitle="Real-time Webhook health & Quality status">
+      <Card
+        title="Active Meta WABA Accounts"
+        subtitle="Real-time Webhook health & Quality status"
+        action={
+          <ExportExcelButton
+            filename="whatsapp-accounts"
+            headers={['Clinic', 'Phone', 'WABA', 'Connection', 'Webhook', 'Latency ms', 'Quality', 'Sent today', 'Received today', 'Last check']}
+            rows={items.map((item) => [
+              item.clinicName,
+              item.phoneNumber,
+              item.wabaId,
+              item.connectionState,
+              item.webhookState,
+              item.latencyMs,
+              item.qualityRating,
+              item.dailyMessagesSent,
+              item.dailyMessagesReceived,
+              formatDateTime(item.lastVerifiedAt),
+            ])}
+          />
+        }
+      >
         <div className="table-container">
           <table>
             <thead>

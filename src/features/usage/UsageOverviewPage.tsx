@@ -7,7 +7,8 @@ import { usageApi } from '../../api/usage.api';
 import { Card } from '../../components/ui/Card';
 import { StatCard } from '../../components/ui/StatCard';
 import { Tabs } from '../../components/ui/Tabs';
-import { formatCurrency, formatCompactNumber, formatTokens } from '../../utils/formatters';
+import { formatCurrency, formatCompactNumber, formatDate, formatTokens } from '../../utils/formatters';
+import { ExportExcelButton } from '../../components/ui/ExportExcelButton';
 
 export const UsageOverviewPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -95,7 +96,7 @@ export const UsageOverviewPage: React.FC = () => {
               }}
             >
               <span style={{ fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)' }}>
-                {day.date}
+                {formatDate(day.date)}
               </span>
               <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
                 {day.whatsappCount} <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 400 }}>WA</span>
@@ -121,6 +122,22 @@ export const UsageOverviewPage: React.FC = () => {
             : 'August 2026 Clinic Usage & Billable Overage'
         }
         subtitle="Itemized breakdown of included quotas vs billable overage fees per clinic"
+        action={
+          <ExportExcelButton
+            filename="clinic-usage"
+            headers={['Clinic', 'WhatsApp included', 'WhatsApp used', 'WhatsApp overage', 'AI included', 'AI used', 'AI overage', 'Total overage']}
+            rows={(data?.clinicsUsage || []).map((c) => [
+              c.clinicName,
+              c.whatsappIncluded,
+              c.whatsappConsumed,
+              c.whatsappOverageCost,
+              c.aiTokensIncluded,
+              c.aiTokensConsumed,
+              c.aiOverageCost,
+              c.totalBillableOverage,
+            ])}
+          />
+        }
       >
         <div className="table-container">
           <table>

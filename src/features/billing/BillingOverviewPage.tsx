@@ -30,6 +30,7 @@ import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import { downloadSaasReceiptHtml } from './DownloadSaasReceipt';
 import { useToast, usePermissions } from '../../hooks';
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters';
+import { ExportExcelButton } from '../../components/ui/ExportExcelButton';
 
 export const BillingOverviewPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -275,6 +276,7 @@ export const BillingOverviewPage: React.FC = () => {
             subtitle="Auto-generated monthly tax bills for enrolled dental clinics"
           >
             <DataTable
+              exportName="recent-saas-invoices"
               columns={invoiceColumns}
               data={invoices.slice(0, 5)}
               total={invoices.length}
@@ -340,7 +342,25 @@ export const BillingOverviewPage: React.FC = () => {
 
       {/* Tab 3: Active Subscriptions */}
       {activeTab === 'subscriptions' && (
-        <Card title="Active Clinic Subscriptions" subtitle="Live recurring billing status across dental tenants">
+        <Card
+          title="Active Clinic Subscriptions"
+          subtitle="Live recurring billing status across dental tenants"
+          action={
+            <ExportExcelButton
+              filename="clinic-subscriptions"
+              headers={['Clinic', 'Plan', 'Monthly price', 'Status', 'Period start', 'Period end', 'Payment method']}
+              rows={subscriptions.map((sub) => [
+                sub.clinicName,
+                sub.planName,
+                sub.amount,
+                sub.status,
+                formatDate(sub.currentPeriodStart),
+                formatDate(sub.currentPeriodEnd),
+                `${sub.paymentMethodBrand} ${sub.paymentMethodLast4}`,
+              ])}
+            />
+          }
+        >
           <div className="table-container">
             <table>
               <thead>
@@ -386,6 +406,7 @@ export const BillingOverviewPage: React.FC = () => {
       {activeTab === 'invoices' && (
         <Card title="CGS Platform Invoices Ledger" subtitle="Official downloadable SaaS tax bills (strictly platform billing, not patient bills)">
           <DataTable
+            exportName="saas-invoices"
             columns={invoiceColumns}
             data={invoices}
             total={invoices.length}
@@ -398,6 +419,7 @@ export const BillingOverviewPage: React.FC = () => {
       {activeTab === 'payments' && (
         <Card title="SaaS Gateway Payment Transactions" subtitle="Razorpay / Payment Gateway transaction ledger">
           <DataTable
+            exportName="saas-payments"
             columns={paymentColumns}
             data={payments}
             total={payments.length}
@@ -411,6 +433,21 @@ export const BillingOverviewPage: React.FC = () => {
         <Card
           title="Failed Recurring Payment Incidents"
           subtitle="Triage failed auto-debit charges and trigger authorized payment gateway retries"
+          action={
+            <ExportExcelButton
+              filename="failed-payments"
+              headers={['Clinic', 'Invoice', 'Amount', 'Failed attempts', 'Last attempt', 'Reason', 'Status']}
+              rows={failedPayments.map((inc) => [
+                inc.clinicName,
+                inc.invoiceNumber,
+                inc.amount,
+                inc.failedAttempts,
+                formatDateTime(inc.lastAttemptAt),
+                inc.errorCategory,
+                inc.status,
+              ])}
+            />
+          }
         >
           <div className="table-container">
             <table>

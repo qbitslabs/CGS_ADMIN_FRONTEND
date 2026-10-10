@@ -18,6 +18,7 @@ import { Badge } from '../../components/ui/Badge';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import { useToast, usePermissions } from '../../hooks';
 import { formatDateTime } from '../../utils/formatters';
+import { ExportExcelButton } from '../../components/ui/ExportExcelButton';
 
 export const PlatformSettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -190,6 +191,17 @@ export const PlatformSettingsPage: React.FC = () => {
           </div>
         }
         subtitle="Zero-plain-text security model: Safe rotation workflow for production credentials"
+        action={
+          <ExportExcelButton
+            filename="platform-secrets"
+            headers={['Secret', 'Fingerprint', 'Last rotated']}
+            rows={Object.entries(settings?.secretsMetadata || {}).map(([key, meta]) => [
+              key,
+              (meta as { keyFingerprint?: string }).keyFingerprint || '',
+              formatDateTime((meta as { lastRotated?: string }).lastRotated),
+            ])}
+          />
+        }
       >
         <div className="table-container">
           <table>

@@ -33,6 +33,11 @@ export const clinicsApi = {
     return res.data?.data || res.data;
   },
 
+  replaceWhatsAppToken: async (id: string, accessToken: string): Promise<{ saved: boolean }> => {
+    const res = await cgs_api.patch(`/clinics/${id}/whatsapp-token`, { accessToken });
+    return res.data?.data || res.data;
+  },
+
   createClinic: async (payload: Record<string, unknown> | Partial<Clinic>): Promise<ClinicDetail> => {
     const res = await cgs_api.post('/clinics', payload);
     return res.data?.data || res.data;

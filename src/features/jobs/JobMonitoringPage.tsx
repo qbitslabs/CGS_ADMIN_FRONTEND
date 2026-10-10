@@ -2,7 +2,7 @@
  * Reads live CGS admin APIs so operators can manage clinics and usage. */
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RotateCcw } from 'lucide-react';
+import { Eye, RotateCcw } from 'lucide-react';
 import { jobsApi } from '../../api/jobs.api';
 import { BackgroundJob, JobStatus } from '../../types';
 import { DataTable, Column } from '../../components/tables/DataTable';
@@ -75,6 +75,9 @@ export const JobMonitoringPage: React.FC = () => {
             {row.jobType}
           </strong>
           <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>ID: {row.id}</div>
+          {row.note ? (
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: 4 }}>{row.note}</div>
+          ) : null}
         </div>
       ),
     },
@@ -110,6 +113,9 @@ export const JobMonitoringPage: React.FC = () => {
       render: (row) => (
         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           Created: {formatDateTime(row.createdAt)}
+          {row.status === 'PENDING' && row.availableAt ? (
+            <div>Next run: {formatDateTime(row.availableAt)}</div>
+          ) : null}
         </div>
       ),
     },
@@ -122,9 +128,10 @@ export const JobMonitoringPage: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
+            leftIcon={<Eye size={13} />}
             onClick={() => setSelectedJobToInspect(row)}
           >
-            Trace
+            Inspect
           </Button>
 
           {can('jobs.retry') && (row.status === 'FAILED' || row.status === 'STALE') && (
@@ -187,6 +194,7 @@ export const JobMonitoringPage: React.FC = () => {
             >
               <option value="ALL">All Queues</option>
               <option value="WHATSAPP">WHATSAPP Queue</option>
+              <option value="SCHEDULER">SCHEDULER</option>
               <option value="AI">AI Queue</option>
               <option value="BILLING">BILLING Queue</option>
               <option value="NOTIFICATIONS">NOTIFICATIONS</option>
@@ -198,6 +206,7 @@ export const JobMonitoringPage: React.FC = () => {
 
       {/* Table */}
       <DataTable
+        exportName="background-jobs"
         columns={columns}
         data={data?.data || []}
         isLoading={isLoading}
@@ -229,6 +238,48 @@ export const JobMonitoringPage: React.FC = () => {
               {getStatusBadge(selectedJobToInspect.status)}
               <Badge variant="neutral">Attempts: {selectedJobToInspect.attempts}/{selectedJobToInspect.maxAttempts}</Badge>
             </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+              <div style={{ padding: '10px 12px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Clinic</span>
+                <div style={{ fontWeight: 600, marginTop: '2px' }}>{selectedJobToInspect.clinicName || 'Platform'}</div>
+              </div>
+              <div style={{ padding: '10px 12px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Created</span>
+                <div style={{ fontWeight: 600, marginTop: '2px' }}>{formatDateTime(selectedJobToInspect.createdAt)}</div>
+              </div>
+              <div style={{ padding: '10px 12px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  {selectedJobToInspect.status === 'PENDING' ? 'Next run' : 'Last finished'}
+                </span>
+                <div style={{ fontWeight: 600, marginTop: '2px' }}>
+                  {selectedJobToInspect.status === 'PENDING' && selectedJobToInspect.availableAt
+                    ? formatDateTime(selectedJobToInspect.availableAt)
+                    : selectedJobToInspect.completedAt
+                      ? formatDateTime(selectedJobToInspect.completedAt)
+                      : 'Not yet'}
+                </div>
+              </div>
+              <div style={{ padding: '10px 12px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Started</span>
+                <div style={{ fontWeight: 600, marginTop: '2px' }}>
+                  {selectedJobToInspect.startedAt ? formatDateTime(selectedJobToInspect.startedAt) : 'Not started'}
+                </div>
+              </div>
+            </div>
+
+            {selectedJobToInspect.details && selectedJobToInspect.details.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {selectedJobToInspect.details.map((item) => (
+                  <div key={item.label}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>{item.label}</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
+                      {/^\d{4}-\d{2}-\d{2}T/.test(item.value) ? formatDateTime(item.value) : item.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {selectedJobToInspect.failureReason && (
               <div

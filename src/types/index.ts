@@ -305,13 +305,15 @@ export interface AiModelStatus {
   totalRequestsToday: number;
 }
 
-export type JobQueueName = 'DEFAULT' | 'WHATSAPP' | 'AI' | 'BILLING' | 'NOTIFICATIONS';
+export type JobQueueName = 'DEFAULT' | 'WHATSAPP' | 'AI' | 'BILLING' | 'NOTIFICATIONS' | 'SCHEDULER';
 export type JobType = 
   | 'WHATSAPP_WEBHOOK_PROCESS' 
   | 'AI_CONVERSATION_SUMMARY' 
   | 'BILLING_RECURRING_CHARGE' 
   | 'META_ADS_SYNC' 
-  | 'APPOINTMENT_REMINDER_DISPATCH' 
+  | 'APPOINTMENT_REMINDER_DISPATCH'
+  | 'OUTBOUND_REMINDER_SCAN'
+  | 'OUTBOUND_OUTCOME_SCAN'
   | 'DATA_RETENTION_CLEANUP';
 
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'STALE';
@@ -326,12 +328,15 @@ export interface BackgroundJob {
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
+  availableAt?: string;
+  note?: string;
   failedAt?: string;
   failureReason?: string;
   stackTrace?: string;
   clinicId?: string;
   clinicName?: string;
   correlationId?: string;
+  details?: Array<{ label: string; value: string }>;
 }
 
 export interface AuditLog {

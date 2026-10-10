@@ -166,6 +166,7 @@ export const AuditLogsPage: React.FC = () => {
 
       {/* DataTable */}
       <DataTable
+        exportName="audit-logs"
         columns={columns}
         data={data?.data || []}
         isLoading={isLoading}

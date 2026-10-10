@@ -108,10 +108,6 @@ interface FormState {
   tplNoResponse: string;
   waConnectionStatus: 'Connected' | 'Not Connected' | 'Testing';
   clinicInformation: string;
-  servicesTreatments: string;
-  doctorsInfo: string;
-  consultationDetails: string;
-  timings: string;
   faqs: string;
   receptionistName: string;
   aiTone: string;
@@ -176,10 +172,6 @@ const initialForm = (): FormState => ({
   tplNoResponse: 'We tried reaching you. Reply anytime and we will help.',
   waConnectionStatus: 'Not Connected',
   clinicInformation: '',
-  servicesTreatments: '',
-  doctorsInfo: '',
-  consultationDetails: '',
-  timings: '',
   faqs: '',
   receptionistName: 'Asha',
   aiTone: 'professional',
@@ -495,10 +487,6 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
         greetingMessage: form.greetingMessage,
         conversationInstructions: form.conversationInstructions,
         clinicInformation: form.clinicInformation,
-        servicesTreatments: form.servicesTreatments || form.selectedServices.join(', '),
-        doctorsInfo: form.doctorsInfo || form.selectedDoctors.join(', '),
-        consultationDetails: form.consultationDetails,
-        timings: form.timings,
         faqs: form.faqs,
         isAiEnabled: true,
       },
@@ -996,10 +984,6 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
                 <div style={sectionStyle}>
                   <div style={sectionTitleStyle}>Clinic Knowledge</div>
                   <TextAreaField label="Clinic Information" value={form.clinicInformation} onChange={(v) => patch('clinicInformation', v)} />
-                  <TextAreaField label="Services & Treatments" value={form.servicesTreatments} onChange={(v) => patch('servicesTreatments', v)} />
-                  <TextAreaField label="Doctors" value={form.doctorsInfo} onChange={(v) => patch('doctorsInfo', v)} />
-                  <TextAreaField label="Consultation Details" value={form.consultationDetails} onChange={(v) => patch('consultationDetails', v)} />
-                  <TextAreaField label="Timings" value={form.timings} onChange={(v) => patch('timings', v)} rows={2} />
                   <TextAreaField label="FAQs" value={form.faqs} onChange={(v) => patch('faqs', v)} />
                 </div>
                 <div style={sectionStyle}>

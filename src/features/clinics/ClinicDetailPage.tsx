@@ -36,17 +36,20 @@ import { Tabs } from '../../components/ui/Tabs';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import { AddClinicProfileModal } from './AddClinicProfileModal';
 import { Skeleton } from '../../components/feedback/Skeleton';
 import { useToast, usePermissions } from '../../hooks';
 import { formatCurrency, formatDate, formatDateTime, formatTokens } from '../../utils/formatters';
+import { ExportExcelButton } from '../../components/ui/ExportExcelButton';
 
 export const ClinicDetailPage: React.FC = () => {
   const { clinicId } = useParams<{ clinicId: string }>();
   const [activeTab, setActiveTab] = useState('overview');
   const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
   const [isAddProfileOpen, setIsAddProfileOpen] = useState(false);
+  const [whatsAppToken, setWhatsAppToken] = useState('');
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -84,6 +87,17 @@ export const ClinicDetailPage: React.FC = () => {
     },
     onError: (err: any) => {
       toastError('Could not set primary doctor', err.message || 'Please try again.');
+    },
+  });
+
+  const tokenMutation = useMutation({
+    mutationFn: () => clinicsApi.replaceWhatsAppToken(clinicId || '', whatsAppToken.trim()),
+    onSuccess: () => {
+      setWhatsAppToken('');
+      success('WhatsApp token saved', 'New outbound messages will use this token.');
+    },
+    onError: (err: any) => {
+      toastError('Could not save the token', err?.response?.data?.message || err.message || 'Please try again.');
     },
   });
 
@@ -387,16 +401,32 @@ export const ClinicDetailPage: React.FC = () => {
           title="Clinic Doctors & Operational Staff Directory"
           subtitle="All medical practitioners and staff profiles registered to this tenant"
           action={
-            can('clinics.write') && (
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<UserPlus size={14} />}
-                onClick={() => setIsAddProfileOpen(true)}
-              >
-                Add Doctor / Staff Profile
-              </Button>
-            )
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <ExportExcelButton
+                filename="clinic-staff"
+                headers={['Name', 'Role', 'Designation', 'Specialization', 'Email', 'Phone', 'Status', 'Last active']}
+                rows={(clinic.users || []).map((u) => [
+                  u.name,
+                  u.role,
+                  u.designation || '',
+                  u.specialization || '',
+                  u.email,
+                  u.phone,
+                  u.status,
+                  formatDateTime(u.lastActiveAt),
+                ])}
+              />
+              {can('clinics.write') && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={<UserPlus size={14} />}
+                  onClick={() => setIsAddProfileOpen(true)}
+                >
+                  Add Doctor / Staff Profile
+                </Button>
+              )}
+            </div>
           }
         >
           <div className="table-container">
@@ -618,6 +648,28 @@ export const ClinicDetailPage: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {can('clinics.write') && (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (whatsAppToken.trim().length >= 20) tokenMutation.mutate();
+                }}
+                style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '520px' }}
+              >
+                <Input
+                  label="Replace access token"
+                  type="password"
+                  autoComplete="off"
+                  value={whatsAppToken}
+                  onChange={(event) => setWhatsAppToken(event.target.value)}
+                  hint="Paste a new token from Meta. The saved token on this clinic cannot be unlocked by this server."
+                />
+                <Button type="submit" disabled={whatsAppToken.trim().length < 20 || tokenMutation.isPending}>
+                  {tokenMutation.isPending ? 'Saving...' : 'Save access token'}
+                </Button>
+              </form>
+            )}
           </div>
         </Card>
       )}

@@ -4,11 +4,14 @@ import React from 'react';
 import { ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { Skeleton } from '../feedback/Skeleton';
 import { EmptyState } from '../feedback/EmptyState';
+import { ExportExcelButton } from '../ui/ExportExcelButton';
+import { formatDate, formatDateTime } from '../../utils/formatters';
 
 export interface Column<T> {
   key: string;
   header: string;
   render?: (row: T, index: number) => React.ReactNode;
+  exportValue?: (row: T) => string | number | null | undefined;
   sortable?: boolean;
   width?: string;
   align?: 'left' | 'center' | 'right';
@@ -29,6 +32,7 @@ export interface DataTableProps<T> {
   emptyTitle?: string;
   emptyDescription?: string;
   onRowClick?: (row: T) => void;
+  exportName?: string;
 }
 
 export function DataTable<T extends { id?: string | number }>({
@@ -46,13 +50,32 @@ export function DataTable<T extends { id?: string | number }>({
   emptyTitle,
   emptyDescription,
   onRowClick,
+  exportName = 'table',
 }: DataTableProps<T>) {
   const totalPages = Math.ceil(total / pageSize) || 1;
+  const exportColumns = columns.filter((col) => !/action|details/i.test(col.key) && !/action|details/i.test(col.header));
+  const exportRows = data.map((row) =>
+    exportColumns.map((col) => {
+      if (col.exportValue) return col.exportValue(row) ?? '';
+      const raw = (row as Record<string, unknown>)[col.key];
+      if (typeof raw === 'number') return raw;
+      if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
+      if (typeof raw !== 'string' || raw === '') return raw == null ? '' : '';
+      if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) return formatDateTime(raw);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return formatDate(raw);
+      return raw;
+    })
+  );
   const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const endItem = Math.min(page * pageSize, total);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+      {data.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <ExportExcelButton filename={exportName} headers={exportColumns.map((col) => col.header)} rows={exportRows} />
+        </div>
+      )}
       <div className="table-container">
         <table>
           <thead>

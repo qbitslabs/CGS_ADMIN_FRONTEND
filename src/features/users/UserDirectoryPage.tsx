@@ -186,6 +186,7 @@ export const UserDirectoryPage: React.FC = () => {
 
       {/* Table */}
       <DataTable
+        exportName="platform-users"
         columns={columns}
         data={data?.data || []}
         isLoading={isLoading}

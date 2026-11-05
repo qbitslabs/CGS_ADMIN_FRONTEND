@@ -2,8 +2,8 @@
  * Reads live CGS admin APIs so operators can manage clinics and usage. */
 /* ==========================================================================
    CGS ADMIN CONTROL PLANE - CLINIC DETAIL PAGE
-   9 Comprehensive Operational Tabs: Overview, Users, Leads, Appointments,
-   WhatsApp Config, AI Receptionist, Billing, Usage, and Audit History.
+   8 Comprehensive Operational Tabs: Overview, Users, Leads, Appointments,
+   WhatsApp Config, AI Receptionist, Billing, and Audit History.
    Includes Doctor & Employee Profile Registration.
    ========================================================================== */
 
@@ -16,7 +16,6 @@ import {
   MessageSquare,
   Sparkles,
   CreditCard,
-  BarChart3,
   ScrollText,
   CalendarCheck,
   UserCheck,
@@ -30,18 +29,23 @@ import {
   UserPlus,
   Stethoscope,
   Star,
+  Eye,
+  Download,
 } from 'lucide-react';
 import { clinicsApi } from '../../api/clinics.api';
+import { billingApi } from '../../api/billing.api';
 import { Tabs } from '../../components/ui/Tabs';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import { AddClinicProfileModal } from './AddClinicProfileModal';
+import { ClinicPlanPanel } from './ClinicPlanPanel';
 import { Skeleton } from '../../components/feedback/Skeleton';
 import { useToast, usePermissions } from '../../hooks';
-import { formatCurrency, formatDate, formatDateTime, formatTokens } from '../../utils/formatters';
+import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters';
 import { ExportExcelButton } from '../../components/ui/ExportExcelButton';
 
 export const ClinicDetailPage: React.FC = () => {
@@ -50,6 +54,18 @@ export const ClinicDetailPage: React.FC = () => {
   const [isSuspendModalOpen, setIsSuspendModalOpen] = useState(false);
   const [isAddProfileOpen, setIsAddProfileOpen] = useState(false);
   const [whatsAppToken, setWhatsAppToken] = useState('');
+  const [billPreview, setBillPreview] = useState<{
+    id: string;
+    invoiceNumber: string;
+    subtotal?: number;
+    taxAmount?: number;
+    total: number;
+    description?: string;
+    status: string;
+    periodStart: string;
+    periodEnd: string;
+    dueAt?: string | null;
+  } | null>(null);
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -129,8 +145,7 @@ export const ClinicDetailPage: React.FC = () => {
     { id: 'appointments', label: 'Appointments', icon: <CalendarCheck size={15} /> },
     { id: 'whatsapp', label: 'WhatsApp Account', icon: <MessageSquare size={15} /> },
     { id: 'ai', label: 'AI Receptionist', icon: <Sparkles size={15} /> },
-    { id: 'billing', label: 'Subscription & Billing', icon: <CreditCard size={15} /> },
-    { id: 'usage', label: 'Usage & Cost', icon: <BarChart3 size={15} /> },
+    { id: 'billing', label: 'Package', icon: <CreditCard size={15} /> },
     { id: 'audit', label: 'Audit History', icon: <ScrollText size={15} /> },
   ];
 
@@ -606,6 +621,36 @@ export const ClinicDetailPage: React.FC = () => {
           subtitle="Direct Meta Cloud WABA Account Connection (Tokens and sensitive secrets are safely redacted)"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {clinic.seats && (
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                {clinic.seats.enforced && clinic.seats.whatsappNumbers.allowed != null
+                  ? `WhatsApp numbers ${clinic.seats.whatsappNumbers.used} of ${clinic.seats.whatsappNumbers.allowed}`
+                  : `WhatsApp numbers in use: ${clinic.seats.whatsappNumbers.used}`}
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+              <div style={{ padding: '14px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Messages this month</span>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
+                  {clinic.packageUsage?.whatsappMessages?.used || 0}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  {clinic.packageUsage?.whatsappMessages
+                    ? `1–${clinic.packageUsage.whatsappMessages.toDay} ${clinic.packageUsage.whatsappMessages.monthLabel}`
+                    : 'This month'}
+                </div>
+              </div>
+              <div style={{ padding: '14px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Lifetime messages</span>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
+                  {clinic.packageUsage?.whatsappMessages?.lifetime || 0}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  All messages sent
+                </div>
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
               <div style={{ padding: '14px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>WABA Phone Number</span>
@@ -674,13 +719,54 @@ export const ClinicDetailPage: React.FC = () => {
         </Card>
       )}
 
-      {/* Tab 6: AI Receptionist Config */}
+      {/* Tab 6: AI Receptionist and recorded usage */}
       {activeTab === 'ai' && (
         <Card
-          title="AI Receptionist LLM Engine"
-          subtitle="Autonomous WhatsApp conversational booking and clinical memory"
+          title="AI Receptionist"
+          subtitle="Model, conversations, and recorded usage for this clinic"
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+              <div style={{ padding: '16px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Total AI conversations</span>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
+                  {clinic.usageSummary.aiConversationsLifetime || 0}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Lifetime
+                </div>
+              </div>
+
+              <div style={{ padding: '16px', backgroundColor: 'var(--status-ai-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--status-ai-border)' }}>
+                {(() => {
+                  const used = clinic.packageUsage?.aiReplies.used || 0;
+                  const allowed = clinic.packageUsage?.aiReplies.allowed;
+                  const percent = allowed ? Math.min(100, Math.round((used / allowed) * 100)) : null;
+                  return (
+                    <>
+                      <span style={{ fontSize: '12px', color: 'var(--status-ai)' }}>AI conversations</span>
+                      <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
+                        {allowed == null ? used : `${used} of ${allowed}`}
+                      </div>
+                      <div style={{ width: '100%', height: '8px', backgroundColor: '#ffffff', borderRadius: '4px', marginTop: '8px', overflow: 'hidden' }}>
+                        <div style={{ width: `${percent ?? 0}%`, height: '100%', backgroundColor: 'var(--status-ai)', borderRadius: '4px' }} />
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <div style={{ padding: '16px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Recorded usage cost</span>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
+                  {formatCurrency((clinic.usageSummary.whatsappCost || 0) + (clinic.usageSummary.aiCost || 0))}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                  Sum of stored WhatsApp and AI costs
+                </div>
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
               <div style={{ padding: '14px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>LLM Model Tier</span>
@@ -688,43 +774,18 @@ export const ClinicDetailPage: React.FC = () => {
                   {clinic.aiConfig.model}
                 </div>
               </div>
-
               <div style={{ padding: '14px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>System Prompt Version</span>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', marginTop: '4px' }}>
                   {clinic.aiConfig.systemPromptVersion}
                 </div>
               </div>
-
               <div style={{ padding: '14px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Custom Knowledge Documents</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Provider</span>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '4px' }}>
-                  {clinic.aiConfig.customKnowledgeDocsCount} FAQs & Price Sheets
+                  {clinic.aiConfig.provider || 'Unavailable'}
                 </div>
               </div>
-            </div>
-
-            <div style={{ padding: '16px', backgroundColor: 'var(--status-ai-bg)', borderRadius: 'var(--radius-md)', border: '1px solid var(--status-ai-border)' }}>
-              {(() => {
-                const quota = clinic.aiConfig.monthlyTokenQuota || 1000000;
-                const consumed = clinic.aiConfig.tokensConsumedThisMonth || 0;
-                const percent = Math.min(100, Math.round((consumed / quota) * 100));
-                return (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--status-ai)' }}>
-                        Monthly Token Consumption
-                      </span>
-                      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {formatTokens(consumed)} / {formatTokens(quota)} ({percent}%)
-                      </span>
-                    </div>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: '#ffffff', borderRadius: '4px', marginTop: '8px', overflow: 'hidden' }}>
-                      <div style={{ width: `${percent}%`, height: '100%', backgroundColor: 'var(--status-ai)', borderRadius: '4px', transition: 'width 0.3s ease' }} />
-                    </div>
-                  </>
-                );
-              })()}
             </div>
           </div>
         </Card>
@@ -733,7 +794,8 @@ export const ClinicDetailPage: React.FC = () => {
       {/* Tab 7: Subscription & Billing */}
       {activeTab === 'billing' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Card title="CGS Subscription Status">
+          <ClinicPlanPanel clinicId={clinic.id} clinic={clinic} canEdit={can('billing.manage_subscriptions')} />
+          <Card title="Package status">
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
               <div>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Current Plan</span>
@@ -744,7 +806,7 @@ export const ClinicDetailPage: React.FC = () => {
               <div>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Monthly Fee</span>
                 <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
-                  {formatCurrency(clinic.subscription.amount)}
+                  {formatCurrency(clinic.subscription.packageMonthly || clinic.subscription.amount)}
                 </div>
               </div>
               <div>
@@ -761,47 +823,70 @@ export const ClinicDetailPage: React.FC = () => {
               </div>
             </div>
           </Card>
+
+          <Card title="Package bills">
+            {(clinic.subscriptionInvoices || []).length === 0 ? (
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
+                No package bill yet. The daily billing job creates one for each active period.
+              </p>
+            ) : (
+              <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color, #e2e8f0)', color: 'var(--text-muted)' }}>
+                    <th style={{ padding: '8px', width: '16%' }}>Invoice</th>
+                    <th style={{ padding: '8px', width: '28%' }}>Period</th>
+                    <th style={{ padding: '8px', width: '14%' }}>Total</th>
+                    <th style={{ padding: '8px', width: '14%' }}>Status</th>
+                    <th style={{ padding: '8px', width: '14%' }}>Due</th>
+                    <th style={{ padding: '8px 4px', width: '14%' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(clinic.subscriptionInvoices || []).map((invoice) => (
+                    <tr key={invoice.id} style={{ borderBottom: '1px solid var(--border-color, #f1f5f9)' }}>
+                      <td style={{ padding: '10px 8px', fontWeight: 600 }}>{invoice.invoiceNumber}</td>
+                      <td style={{ padding: '10px 8px', whiteSpace: 'normal' }}>{formatDate(invoice.periodStart)} – {formatDate(invoice.periodEnd)}</td>
+                      <td style={{ padding: '10px 8px' }}>{formatCurrency(invoice.total)}</td>
+                      <td style={{ padding: '10px 8px' }}>{invoice.status}</td>
+                      <td style={{ padding: '10px 8px' }}>{invoice.dueAt ? formatDate(invoice.dueAt) : '—'}</td>
+                      <td style={{ padding: '6px 2px', width: '14%' }}>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Overview"
+                            aria-label="Overview"
+                            style={{ padding: 4, width: 28, height: 28 }}
+                            onClick={() => setBillPreview(invoice)}
+                          >
+                            <Eye size={15} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Download PDF"
+                            aria-label="Download PDF"
+                            style={{ padding: 4, width: 28, height: 28 }}
+                            onClick={() => {
+                              billingApi.downloadInvoicePdf(invoice.id, invoice.invoiceNumber).catch((err) => {
+                                toastError(err instanceof Error ? err.message : 'Could not download the invoice.');
+                              });
+                            }}
+                          >
+                            <Download size={15} />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
         </div>
       )}
 
-      {/* Tab 8: Usage & Cost */}
-      {activeTab === 'usage' && (
-        <Card title="August 2026 Usage & Overage Breakdown">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-            <div style={{ padding: '16px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>WhatsApp Service Chats</span>
-              <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
-                {clinic.usageSummary.whatsappConversations} Chats
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Overage Cost: <strong>{formatCurrency(clinic.usageSummary.whatsappCost)}</strong>
-              </div>
-            </div>
-
-            <div style={{ padding: '16px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>AI Tokens Utilized</span>
-              <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
-                {formatTokens(clinic.usageSummary.aiTokens)}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Within Included Quota (₹0 Overage)
-              </div>
-            </div>
-
-            <div style={{ padding: '16px', backgroundColor: 'var(--status-warning-bg)', borderRadius: 'var(--radius-md)' }}>
-              <span style={{ fontSize: '12px', color: 'var(--status-warning)' }}>Total Billable Overage</span>
-              <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--status-warning)', marginTop: '4px' }}>
-                {formatCurrency(clinic.usageSummary.totalOverageCost)}
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                Added to end-of-month invoice
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Tab 9: Audit History */}
+      {/* Tab 8: Audit History */}
       {activeTab === 'audit' && (
         <Card title="Clinic Audit Log History">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -842,12 +927,68 @@ export const ClinicDetailPage: React.FC = () => {
         onClose={() => setIsAddProfileOpen(false)}
         clinicId={clinic.id}
         clinicName={clinic.name}
+        seats={clinic.seats}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['admin', 'clinic', clinicId] });
           queryClient.invalidateQueries({ queryKey: ['admin', 'clinics'] });
           queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
         }}
       />
+
+      <Modal
+        isOpen={!!billPreview}
+        onClose={() => setBillPreview(null)}
+        title={billPreview?.invoiceNumber || 'Invoice'}
+        subtitle={clinic.name}
+        footer={
+          billPreview ? (
+            <Button
+              variant="primary"
+              leftIcon={<Download size={14} />}
+              onClick={() => {
+                billingApi.downloadInvoicePdf(billPreview.id, billPreview.invoiceNumber).catch((err) => {
+                  toastError(err instanceof Error ? err.message : 'Could not download the invoice.');
+                });
+              }}
+            >
+              Download PDF
+            </Button>
+          ) : null
+        }
+      >
+        {billPreview && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '13.5px' }}>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Description</div>
+              <strong>{billPreview.description || 'Package'}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Status</div>
+              <strong>{billPreview.status}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Taxable value</div>
+              <strong>{formatCurrency(billPreview.subtotal || billPreview.total)}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>GST 18%</div>
+              <strong>{formatCurrency(billPreview.taxAmount || 0)}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Total payable</div>
+              <strong>{formatCurrency(billPreview.total)}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Period</div>
+              <strong>{formatDate(billPreview.periodStart)} – {formatDate(billPreview.periodEnd)}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Due</div>
+              <strong>{billPreview.dueAt ? formatDate(billPreview.dueAt) : '—'}</strong>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Suspend Clinic Confirmation Modal */}
       <ConfirmationModal

@@ -29,8 +29,8 @@ export const AiManagerPage: React.FC = () => {
 
   // Playground state
   const [testEntityType, setTestEntityType] = useState('CLINIC');
-  const [testEntityId, setTestEntityId] = useState('apex-dental');
-  const [testMessage, setTestMessage] = useState('Kal subah slot available hai kya?');
+  const [testEntityId, setTestEntityId] = useState('');
+  const [testMessage, setTestMessage] = useState('');
   const [testResponse, setTestResponse] = useState<any>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -118,7 +118,7 @@ export const AiManagerPage: React.FC = () => {
             AI Control Center & Intelligence Hub
           </h1>
           <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-            Decoupled multi-entity intelligence engine, OpenRouter token ledger, conversation inspector, and real-time health.
+            Live model, token ledger, and conversations from the AI service.
           </p>
         </div>
         <Badge variant={health?.aiService === 'ONLINE' ? 'success' : 'warning'}>
@@ -142,7 +142,8 @@ export const AiManagerPage: React.FC = () => {
       >
         <ShieldCheck size={20} color="#9333ea" />
         <div>
-          <strong>Strict Architectural Decoupling:</strong> The Python AI backend has zero direct database credentials for CGS. Doctor and clinic requests execute through authenticated internal APIs (<code>/api/v1/internal/ai/*</code>), while generic entities query their own dedicated database.
+          <strong>Model in use:</strong> {health?.aiDetails?.model || 'Waiting for the AI service'}
+          {health?.aiDetails?.provider ? ` via ${health.aiDetails.provider}` : ''}
         </div>
       </div>
 
@@ -248,68 +249,85 @@ export const AiManagerPage: React.FC = () => {
       {activeTab === 'health' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div className="grid-cards-4">
-            <Card title="Python AI Service">
+            <Card title="AI service">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                 <CheckCircle2 color="var(--c-emerald-600, #059669)" size={20} />
-                <span style={{ fontSize: '15px', fontWeight: 700 }}>FastAPI Running (Port 8000)</span>
+                <span style={{ fontSize: '15px', fontWeight: 700 }}>{health?.aiService || 'Checking'}</span>
               </div>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                4-layer memory & tool execution active
+                {health?.aiDetails?.latency || 'Latency pending'} · {health?.database || 'database unknown'}
               </p>
             </Card>
 
-            <Card title="OpenRouter AI Provider">
+            <Card title="Live model">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                 <Sparkles color="#9333ea" size={20} />
-                <span style={{ fontSize: '15px', fontWeight: 700 }}>Google: Gemma 4 31B</span>
+                <span style={{ fontSize: '15px', fontWeight: 700 }}>{health?.aiDetails?.model || 'Unavailable'}</span>
               </div>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                google/gemma-4-31b-it
+                {health?.aiDetails?.provider || 'provider unknown'}
+                {health?.aiDetails?.llmConfigured ? ' · key configured' : ' · key missing'}
               </p>
             </Card>
 
-            <Card title="CGS Internal Bridge">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-                <CheckCircle2 color="var(--c-emerald-600, #059669)" size={20} />
-                <span style={{ fontSize: '15px', fontWeight: 700 }}>Authenticated API</span>
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Header: X-Internal-Service-Key
-              </p>
-            </Card>
-
-            <Card title="Dedicated AI Database">
+            <Card title="Fallback models">
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
                 <Layers color="#2563eb" size={20} />
-                <span style={{ fontSize: '15px', fontWeight: 700 }}>Async SQLite / PG</span>
+                <span style={{ fontSize: '15px', fontWeight: 700 }}>{health?.aiDetails?.fallbackModel || 'None'}</span>
               </div>
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                Dedicated conversation & usage datastore
+                {health?.aiDetails?.fallbackModel2 || 'No second fallback'}
+              </p>
+            </Card>
+
+            <Card title="Token ledger">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
+                <CheckCircle2 color="var(--c-emerald-600, #059669)" size={20} />
+                <span style={{ fontSize: '15px', fontWeight: 700 }}>
+                  {usageSummary ? formatCompactNumber(usageSummary.total_tokens) : '…'}
+                </span>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                {usageSummary ? `${usageSummary.total_requests} replies in ${usageSummary.period_days} days` : 'Loading recorded usage'}
               </p>
             </Card>
           </div>
 
-          <Card title="LLM Models & Capabilities Matrix">
+          <Card title="Models in use">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color, #e2e8f0)', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '10px' }}>Model Name</th>
+                  <th style={{ padding: '10px' }}>Model</th>
                   <th style={{ padding: '10px' }}>Role</th>
-                  <th style={{ padding: '10px' }}>Input Rate / 1M</th>
-                  <th style={{ padding: '10px' }}>Output Rate / 1M</th>
-                  <th style={{ padding: '10px' }}>Tool Calling Support</th>
+                  <th style={{ padding: '10px' }}>Input USD / 1M</th>
+                  <th style={{ padding: '10px' }}>Output USD / 1M</th>
                   <th style={{ padding: '10px' }}>Status</th>
                 </tr>
               </thead>
               <tbody>
-                <tr style={{ borderBottom: '1px solid var(--border-color, #f1f5f9)' }}>
-                  <td style={{ padding: '12px 10px', fontWeight: 600 }}>Google: Gemma 4 31B</td>
-                  <td style={{ padding: '12px 10px' }}><Badge variant="info">DEFAULT</Badge></td>
-                  <td style={{ padding: '12px 10px' }}>$0.08</td>
-                  <td style={{ padding: '12px 10px' }}>$0.35</td>
-                  <td style={{ padding: '12px 10px', color: 'var(--c-emerald-600)' }}>Supported (Autonomous)</td>
-                  <td style={{ padding: '12px 10px' }}><Badge variant="success">OPERATIONAL</Badge></td>
-                </tr>
+                {(health?.aiDetails?.models || []).map((name: string, index: number) => {
+                  const rate = (health?.aiDetails?.modelRates || []).find((row: { name: string }) => row.name === name);
+                  return (
+                  <tr key={name} style={{ borderBottom: '1px solid var(--border-color, #f1f5f9)' }}>
+                    <td style={{ padding: '12px 10px', fontWeight: 600 }}>{name}</td>
+                    <td style={{ padding: '12px 10px' }}>
+                      <Badge variant={index === 0 ? 'info' : 'neutral'}>{index === 0 ? 'DEFAULT' : 'FALLBACK'}</Badge>
+                    </td>
+                    <td style={{ padding: '12px 10px' }}>${rate?.inputUsdPerMillion ?? health?.aiDetails?.inputUsdPerMillion ?? 0}</td>
+                    <td style={{ padding: '12px 10px' }}>${rate?.outputUsdPerMillion ?? health?.aiDetails?.outputUsdPerMillion ?? 0}</td>
+                    <td style={{ padding: '12px 10px' }}>
+                      <Badge variant={health?.aiService === 'HEALTHY' ? 'success' : 'warning'}>{health?.aiService || 'UNKNOWN'}</Badge>
+                    </td>
+                  </tr>
+                  );
+                })}
+                {(health?.aiDetails?.models || []).length === 0 && (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '12px 10px', color: 'var(--text-muted)' }}>
+                      The AI service did not report a model.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </Card>
@@ -655,9 +673,7 @@ export const AiManagerPage: React.FC = () => {
                   value={testEntityType}
                   onChange={(e) => {
                     setTestEntityType(e.target.value);
-                    if (e.target.value === 'CLINIC') setTestEntityId('apex-dental');
-                    else if (e.target.value === 'DOCTOR') setTestEntityId('doc-001');
-                    else setTestEntityId('ent_rest_01');
+                    setTestEntityId('');
                   }}
                   style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', marginTop: '4px' }}
                 >

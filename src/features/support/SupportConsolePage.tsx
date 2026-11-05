@@ -31,19 +31,11 @@ export const SupportConsolePage: React.FC = () => {
       const data = res.data?.data || res.data;
       if (data?.clinicResult) {
         setDiagnosticResult(data.clinicResult);
+        success('Diagnostic Complete', `Health scan for ${data.clinicResult.clinicName} finished.`);
       } else {
-        setDiagnosticResult({
-          clinicName: clinicQuery,
-          wabaHealth: data?.system?.whatsappService?.status || 'HEALTHY',
-          wabaLatency: data?.system?.whatsappService?.latency || '142ms',
-          aiQuotaState: data?.system?.aiService?.status || 'NORMAL',
-          aiTokensRemaining: '820,000 / 1,000,000',
-          webhookStatus: 'ACTIVE (HTTP 200)',
-          lastPing: new Date().toLocaleTimeString(),
-          unresolvedErrors: 0,
-        });
+        setDiagnosticResult(null);
+        toastError('Clinic not found', 'No clinic matched that name or slug.');
       }
-      success('Diagnostic Complete', `Health scan for ${clinicQuery} finished.`);
     } catch (err: any) {
       toastError('Diagnostic Failed', err.message || 'Could not complete scan.');
     } finally {
@@ -71,7 +63,7 @@ export const SupportConsolePage: React.FC = () => {
             <span>Clinic Live Diagnostic Scan</span>
           </div>
         }
-        subtitle="Perform an automated ping test across WABA, OpenAI Gateway, and Database"
+        subtitle="Ping the clinic database, WhatsApp account, and the live AI model"
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', maxWidth: '600px' }}>
@@ -121,9 +113,10 @@ export const SupportConsolePage: React.FC = () => {
               </div>
 
               <div>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>AI Receptionist Quota</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>AI tokens this month</span>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--status-ai)', marginTop: '2px' }}>
-                  {diagnosticResult.aiTokensRemaining}
+                  {Number(diagnosticResult.aiTokensUsedThisMonth || 0).toLocaleString()}
+                  {diagnosticResult.aiModel ? ` · ${diagnosticResult.aiModel}` : ''}
                 </div>
               </div>
 
@@ -144,7 +137,9 @@ export const SupportConsolePage: React.FC = () => {
               <div>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Critical Incidents</span>
                 <div style={{ marginTop: '2px' }}>
-                  <Badge variant="success">0 Open Errors</Badge>
+                  <Badge variant={diagnosticResult.unresolvedErrors > 0 ? 'warning' : 'success'}>
+                    {diagnosticResult.unresolvedErrors || 0} failed jobs
+                  </Badge>
                 </div>
               </div>
             </div>

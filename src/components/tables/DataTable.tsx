@@ -15,6 +15,7 @@ export interface Column<T> {
   sortable?: boolean;
   width?: string;
   align?: 'left' | 'center' | 'right';
+  wrap?: boolean;
 }
 
 export interface DataTableProps<T> {
@@ -33,6 +34,7 @@ export interface DataTableProps<T> {
   emptyDescription?: string;
   onRowClick?: (row: T) => void;
   exportName?: string;
+  fit?: boolean;
 }
 
 export function DataTable<T extends { id?: string | number }>({
@@ -51,6 +53,7 @@ export function DataTable<T extends { id?: string | number }>({
   emptyDescription,
   onRowClick,
   exportName = 'table',
+  fit = false,
 }: DataTableProps<T>) {
   const totalPages = Math.ceil(total / pageSize) || 1;
   const exportColumns = columns.filter((col) => !/action|details/i.test(col.key) && !/action|details/i.test(col.header));
@@ -76,7 +79,7 @@ export function DataTable<T extends { id?: string | number }>({
           <ExportExcelButton filename={exportName} headers={exportColumns.map((col) => col.header)} rows={exportRows} />
         </div>
       )}
-      <div className="table-container">
+      <div className={fit ? 'table-container table-fit' : 'table-container'}>
         <table>
           <thead>
             <tr>
@@ -145,10 +148,11 @@ export function DataTable<T extends { id?: string | number }>({
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      style={{
-                        textAlign: col.align || 'left',
-                        whiteSpace: 'nowrap',
-                      }}
+                    style={{
+                      textAlign: col.align || 'left',
+                      whiteSpace: col.wrap ? 'normal' : 'nowrap',
+                      width: col.width,
+                    }}
                     >
                       {col.render ? col.render(row, index) : (row as any)[col.key]}
                     </td>

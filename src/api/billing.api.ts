@@ -68,4 +68,22 @@ export const billingApi = {
   retryFailedPayment: async (_id: string): Promise<FailedPaymentIncident> => {
     throw new Error('No pending retry payment.');
   },
+
+  downloadInvoicePdf: async (invoiceId: string, invoiceNumber: string) => {
+    const res = await cgs_api.get(`/invoices/${invoiceId}/pdf`, { responseType: 'blob' });
+    const blob = new Blob([res.data], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Invoice-${invoiceNumber}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  createOneTimeInvoice: async (body: { clinicId: string; description: string; amount: number; dueDate?: string }): Promise<SaasInvoice> => {
+    const res = await cgs_api.post('/invoices', body);
+    return res.data?.data || res.data;
+  },
 };

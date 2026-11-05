@@ -85,7 +85,7 @@ export const AdminLayout: React.FC = () => {
       requiredPermission: 'support.read',
     },
     {
-      label: 'Billing & Plans',
+      label: 'Packages',
       path: '/billing',
       icon: <CreditCard size={18} />,
       requiredPermission: 'billing.read',

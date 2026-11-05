@@ -157,7 +157,7 @@ export const JobMonitoringPage: React.FC = () => {
           Background Job Queues & Worker Health
         </h1>
         <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-          Operational control over asynchronous BullMQ task queues, failure diagnostics, and safe retries.
+          Operational control of the Postgres job worker, failed jobs, and retries.
         </p>
       </div>
 

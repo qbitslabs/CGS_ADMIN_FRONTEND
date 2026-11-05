@@ -63,7 +63,9 @@ export const DashboardPage: React.FC = () => {
             CGS Platform Command Center
           </h1>
           <p style={{ fontSize: '13.5px', color: '#94a3b8', marginTop: '4px' }}>
-            All systems operational. Serving <strong>{kpi?.activeClinics || 3} Dental Practices</strong> across active clinical regions.
+            {kpi?.overviewLoaded
+              ? <>Serving <strong>{kpi.activeClinics}</strong> active clinics.</>
+              : 'Clinic totals are unavailable right now.'}
           </p>
         </div>
 
@@ -101,7 +103,7 @@ export const DashboardPage: React.FC = () => {
           <StatCard
             title="Total Active Clinics"
             value={`${kpi?.activeClinics || 0} / ${kpi?.totalClinics || 0}`}
-            subtitle={`${kpi?.newClinicsThisMonth || 0} new this month`}
+            subtitle={kpi?.overviewLoaded ? `${kpi?.newClinicsThisMonth || 0} new this month` : 'Clinic totals unavailable'}
             icon={<Building2 size={22} />}
             iconBg="var(--c-primary-50)"
             iconColor="var(--c-primary-600)"
@@ -110,34 +112,22 @@ export const DashboardPage: React.FC = () => {
           <StatCard
             title="Monthly Platform MRR"
             value={formatCurrency(kpi?.mrr || 0)}
-            subtitle={
-              kpi?.mrr
-                ? `ARR ${formatCurrency((kpi.mrr || 0) * 12)}`
-                : 'Monthly recurring revenue'
-            }
+            subtitle={kpi?.overviewLoaded ? 'From recorded invoices' : 'Revenue unavailable'}
             icon={<TrendingUp size={22} />}
             iconBg="var(--status-success-bg)"
             iconColor="var(--status-success)"
           />
 
           <StatCard
-            title="Active Subscriptions"
+            title="Active Packages"
             value={kpi?.activeSubscriptions || 0}
-            subtitle={
-              kpi?.failedPaymentCount
-                ? `${kpi.failedPaymentCount} failed payment${kpi.failedPaymentCount === 1 ? '' : 's'} need action`
-                : 'No failed payments'
-            }
+            subtitle={kpi?.overviewLoaded ? 'Active clinic records' : 'Unavailable'}
             badge={
               kpi?.failedPaymentCount ? (
                 <Badge variant="error" size="sm">
                   {kpi.failedPaymentCount} Past Due
                 </Badge>
-              ) : (
-                <Badge variant="success" size="sm">
-                  All Current
-                </Badge>
-              )
+              ) : undefined
             }
             icon={<CreditCard size={22} />}
             iconBg="var(--status-warning-bg)"
@@ -159,9 +149,7 @@ export const DashboardPage: React.FC = () => {
       <div className="grid-cards-3">
         {/* Card 1: WhatsApp Cloud API Meter */}
         {(() => {
-          const waTotalLimit = Math.max(1, (kpi?.activeClinics || 1) * 7500);
           const waUsed = kpi?.whatsappConversations || 0;
-          const waPct = Math.min(100, Math.max(waUsed > 0 ? 1 : 0, Math.round((waUsed / waTotalLimit) * 100)));
 
           return (
             <Card
@@ -192,9 +180,9 @@ export const DashboardPage: React.FC = () => {
                 <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--c-slate-100)', borderRadius: '4px', overflow: 'hidden' }}>
                   <div
                     style={{
-                      width: `${waPct}%`,
+                      width: waUsed > 0 ? '100%' : '0%',
                       height: '100%',
-                      backgroundColor: waPct > 90 ? 'var(--status-warning)' : 'var(--status-success)',
+                      backgroundColor: 'var(--status-success)',
                       borderRadius: '4px',
                       transition: 'width 0.4s ease',
                     }}
@@ -202,8 +190,8 @@ export const DashboardPage: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  <span>Included Tier: {waTotalLimit.toLocaleString()}</span>
-                  <span>{waUsed > waTotalLimit ? `Overage: ${(waUsed - waTotalLimit).toLocaleString()} @ ₹0.40` : `${waPct}% consumed`}</span>
+                  <span>Recorded on the platform</span>
+                  <span>{formatCompactNumber(waUsed)} conversations</span>
                 </div>
               </div>
             </Card>
@@ -212,9 +200,8 @@ export const DashboardPage: React.FC = () => {
 
         {/* Card 2: AI Receptionist LLM Meter */}
         {(() => {
-          const aiTotalLimit = Math.max(1, (kpi?.activeClinics || 1) * 1000000);
           const aiUsed = kpi?.aiTokens || 0;
-          const aiPct = Math.min(100, Math.max(aiUsed > 0 ? 1 : 0, Math.round((aiUsed / aiTotalLimit) * 100)));
+          const modelName = health?.openaiApi.model || 'Model unavailable';
 
           return (
             <Card
@@ -224,7 +211,7 @@ export const DashboardPage: React.FC = () => {
                   <span>AI Receptionist LLM Load</span>
                 </div>
               }
-              subtitle="Google: Gemma 4 31B tokens"
+              subtitle={modelName}
               action={
                 <Link to="/usage/ai">
                   <span style={{ fontSize: '12.5px', color: 'var(--c-primary-600)', fontWeight: 600 }}>Details →</span>
@@ -245,7 +232,7 @@ export const DashboardPage: React.FC = () => {
                 <div style={{ width: '100%', height: '8px', backgroundColor: 'var(--c-slate-100)', borderRadius: '4px', overflow: 'hidden' }}>
                   <div
                     style={{
-                      width: `${aiPct}%`,
+                      width: aiUsed > 0 ? '100%' : '0%',
                       height: '100%',
                       backgroundColor: 'var(--status-ai)',
                       borderRadius: '4px',
@@ -255,8 +242,8 @@ export const DashboardPage: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-muted)' }}>
-                  <span>Included: {formatTokens(aiTotalLimit)}</span>
-                  <span>{aiUsed > aiTotalLimit ? `Overage: ${formatTokens(aiUsed - aiTotalLimit)}` : `${aiPct}% allocated`}</span>
+                  <span>Tokens recorded from live replies</span>
+                  <span>{formatTokens(aiUsed)}</span>
                 </div>
               </div>
             </Card>
@@ -276,29 +263,31 @@ export const DashboardPage: React.FC = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>PostgreSQL Database</span>
-              <Badge variant="success" size="sm">
-                Operational ({health?.database.latency || 12}ms)
+              <Badge variant={health?.database.status === 'HEALTHY' ? 'success' : 'warning'} size="sm">
+                {health?.database.status || 'UNKNOWN'} ({health?.database.latency ?? 0}ms)
               </Badge>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>BullMQ Redis Queue</span>
-              <Badge variant="success" size="sm">
-                {health?.redisQueue.activeWorkers || 4} Workers Active
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Background jobs</span>
+              <Badge variant={health?.redisQueue.status === 'HEALTHY' ? 'success' : 'warning'} size="sm">
+                {health?.redisQueue.pendingJobs ?? 0} pending
               </Badge>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Meta WhatsApp Gateway</span>
-              <Badge variant="success" size="sm">
-                Operational (:5000)
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>WhatsApp gateway</span>
+              <Badge variant={health?.whatsappCloudApi.status === 'HEALTHY' ? 'success' : 'warning'} size="sm">
+                {health?.whatsappCloudApi.status || 'UNKNOWN'} ({health?.whatsappCloudApi.latency ?? 0}ms)
               </Badge>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0' }}>
-              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Google: Gemma 4 31B (OpenRouter)</span>
-              <Badge variant="success" size="sm">
-                Operational (240ms)
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                {health?.openaiApi.model || 'AI model'}{health?.openaiApi.provider ? ` (${health.openaiApi.provider})` : ''}
+              </span>
+              <Badge variant={health?.openaiApi.status === 'HEALTHY' ? 'success' : 'warning'} size="sm">
+                {health?.openaiApi.status || 'UNKNOWN'} ({health?.openaiApi.latency ?? 0}ms)
               </Badge>
             </div>
           </div>

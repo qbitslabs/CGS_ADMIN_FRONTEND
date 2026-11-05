@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, MessageSquare, Sparkles, TrendingUp, DollarSign } from 'lucide-react';
 import { usageApi } from '../../api/usage.api';
+import { aiApi } from '../../api/ai.api';
 import { Card } from '../../components/ui/Card';
 import { StatCard } from '../../components/ui/StatCard';
 import { Tabs } from '../../components/ui/Tabs';
@@ -16,6 +17,10 @@ export const UsageOverviewPage: React.FC = () => {
   const { data } = useQuery({
     queryKey: ['admin', 'usage'],
     queryFn: () => usageApi.getUsageOverview(),
+  });
+  const { data: aiHealth } = useQuery({
+    queryKey: ['admin', 'ai', 'health'],
+    queryFn: () => aiApi.getHealth(),
   });
 
   const tabs = [
@@ -50,7 +55,7 @@ export const UsageOverviewPage: React.FC = () => {
         <StatCard
           title="Total WhatsApp Cost"
           value={formatCurrency(data?.totalWhatsAppCost)}
-          subtitle="Aggregated @ ₹0.40 overage rate"
+          subtitle="Recorded WhatsApp usage cost"
           icon={<DollarSign size={22} />}
           iconBg="var(--c-primary-50)"
           iconColor="var(--c-primary-600)"
@@ -59,7 +64,7 @@ export const UsageOverviewPage: React.FC = () => {
         <StatCard
           title="Total AI Tokens Consumed"
           value={formatTokens(data?.totalAiTokens)}
-          subtitle="Google: Gemma 4 31B"
+          subtitle={aiHealth?.aiDetails?.model || 'Live model unavailable'}
           icon={<Sparkles size={22} />}
           iconBg="var(--status-ai-bg)"
           iconColor="var(--status-ai)"
@@ -68,7 +73,7 @@ export const UsageOverviewPage: React.FC = () => {
         <StatCard
           title="Total AI LLM Cost"
           value={formatCurrency(data?.totalAiCost)}
-          subtitle="Aggregated @ ₹0.15 / 1k tokens"
+          subtitle="Recorded token cost from AI usage logs"
           icon={<TrendingUp size={22} />}
           iconBg="var(--status-warning-bg)"
           iconColor="var(--status-warning)"
@@ -116,10 +121,10 @@ export const UsageOverviewPage: React.FC = () => {
       <Card
         title={
           activeTab === 'whatsapp'
-            ? 'August 2026 WhatsApp Cloud API Usage'
+            ? 'WhatsApp usage by clinic'
             : activeTab === 'ai'
-            ? 'August 2026 AI Receptionist Token Usage'
-            : 'August 2026 Clinic Usage & Billable Overage'
+            ? 'AI token usage by clinic'
+            : 'Clinic usage'
         }
         subtitle="Itemized breakdown of included quotas vs billable overage fees per clinic"
         action={
@@ -146,16 +151,16 @@ export const UsageOverviewPage: React.FC = () => {
                 <th>Clinic Tenant</th>
                 {(activeTab === 'all' || activeTab === 'whatsapp') && (
                   <>
-                    <th>WhatsApp Included</th>
-                    <th>WhatsApp Used</th>
-                    <th>WhatsApp Overage (₹0.40)</th>
+                    <th>WhatsApp included</th>
+                    <th>WhatsApp used</th>
+                    <th>WhatsApp overage</th>
                   </>
                 )}
                 {(activeTab === 'all' || activeTab === 'ai') && (
                   <>
-                    <th>AI Included</th>
-                    <th>AI Tokens Used</th>
-                    <th>AI Overage (₹0.15/1k)</th>
+                    <th>AI included</th>
+                    <th>AI tokens used</th>
+                    <th>AI overage</th>
                   </>
                 )}
                 <th style={{ textAlign: 'right' }}>Total Billable Overage</th>
@@ -169,9 +174,9 @@ export const UsageOverviewPage: React.FC = () => {
                   </td>
                   {(activeTab === 'all' || activeTab === 'whatsapp') && (
                     <>
-                      <td>{c.whatsappIncluded.toLocaleString()}</td>
+                      <td>{c.whatsappIncluded == null ? '—' : c.whatsappIncluded.toLocaleString()}</td>
                       <td>
-                        <span style={{ fontWeight: 600, color: c.whatsappConsumed > c.whatsappIncluded ? 'var(--status-warning)' : 'inherit' }}>
+                        <span style={{ fontWeight: 600, color: c.whatsappIncluded != null && c.whatsappConsumed > c.whatsappIncluded ? 'var(--status-warning)' : 'inherit' }}>
                           {c.whatsappConsumed.toLocaleString()}
                         </span>
                       </td>
@@ -180,9 +185,9 @@ export const UsageOverviewPage: React.FC = () => {
                   )}
                   {(activeTab === 'all' || activeTab === 'ai') && (
                     <>
-                      <td>{formatTokens(c.aiTokensIncluded)}</td>
+                      <td>{c.aiTokensIncluded == null ? '—' : formatTokens(c.aiTokensIncluded)}</td>
                       <td>
-                        <span style={{ fontWeight: 600, color: c.aiTokensConsumed > c.aiTokensIncluded ? 'var(--status-warning)' : 'inherit' }}>
+                        <span style={{ fontWeight: 600, color: c.aiTokensIncluded != null && c.aiTokensConsumed > c.aiTokensIncluded ? 'var(--status-warning)' : 'inherit' }}>
                           {formatTokens(c.aiTokensConsumed)}
                         </span>
                       </td>

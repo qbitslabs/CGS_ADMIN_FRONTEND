@@ -81,21 +81,14 @@ export interface GenericEntity {
 
 export const aiApi = {
   getHealth: async (): Promise<AiHealthData> => {
-    try {
-      const res = await cgs_api.get('/overview');
-      return {
-        aiService: 'ONLINE',
-        aiDetails: res.data?.data?.ai,
-        cgsInternalApi: 'ONLINE',
-        database: 'HEALTHY',
-      };
-    } catch {
-      return {
-        aiService: 'OFFLINE',
-        cgsInternalApi: 'ONLINE',
-        database: 'HEALTHY',
-      };
-    }
+    const res = await cgs_api.get('/support/diagnostics');
+    const system = res.data?.data?.system || res.data?.system || {};
+    return {
+      aiService: system.aiService?.status || 'UNKNOWN',
+      aiDetails: system.aiService,
+      cgsInternalApi: system.database?.status || 'UNKNOWN',
+      database: system.database?.status || 'UNKNOWN',
+    };
   },
 
   getUsageSummary: async (days: number = 30): Promise<AiUsageSummary> => {
@@ -212,30 +205,36 @@ export const aiApi = {
     const aiLatency = parseInt(String(diag.system?.aiService?.latency || '0').replace(/[^\d]/g, ''), 10) || 0;
     const aiOk = String(diag.system?.aiService?.status || '').toUpperCase() === 'HEALTHY';
 
+    const liveModel = diag.system?.aiService?.model;
+    const liveModels: string[] = Array.isArray(diag.system?.aiService?.models)
+      ? diag.system.aiService.models
+      : liveModel
+        ? [liveModel]
+        : [];
+    const provider = String(diag.system?.aiService?.provider || 'LIVE').toUpperCase();
+
     if (Array.isArray(modelsRaw) && modelsRaw.length > 0) {
       return modelsRaw.map((m: any) => ({
-        provider: (m.provider || 'GOOGLE').toUpperCase(),
-        modelName: m.model || 'Google: Gemma 4 31B',
+        provider,
+        modelName: m.model || liveModel || 'Unknown model',
         status: aiOk ? 'OPERATIONAL' : 'DEGRADED',
         latencyMs: Math.round(m.avgDurationMs || aiLatency || 0),
-        tokenCostPer1k: m.totalTokens ? Number(m.totalCost || 0) / (m.totalTokens / 1000) : 0.00008,
-        promptVersion: 'v2.4',
-        errorRatePercent: aiOk ? 0.1 : 5,
+        tokenCostPer1k: m.totalTokens ? Number(m.totalCost || 0) / (m.totalTokens / 1000) : 0,
+        promptVersion: '',
+        errorRatePercent: 0,
         totalRequestsToday: m.requests || 0,
       }));
     }
 
-    return [
-      {
-        provider: 'GOOGLE',
-        modelName: 'Google: Gemma 4 31B',
-        status: aiOk ? 'OPERATIONAL' : 'DEGRADED',
-        latencyMs: aiLatency,
-        tokenCostPer1k: 0.00008,
-        promptVersion: 'v2.4',
-        errorRatePercent: aiOk ? 0.1 : 5,
-        totalRequestsToday: 0,
-      },
-    ];
+    return liveModels.map((name) => ({
+      provider,
+      modelName: name,
+      status: aiOk ? 'OPERATIONAL' : 'DEGRADED',
+      latencyMs: aiLatency,
+      tokenCostPer1k: 0,
+      promptVersion: '',
+      errorRatePercent: 0,
+      totalRequestsToday: 0,
+    }));
   },
 };

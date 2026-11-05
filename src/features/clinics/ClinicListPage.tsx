@@ -96,16 +96,17 @@ export const ClinicListPage: React.FC = () => {
     }
   };
 
-  const getTierBadge = (tier: Clinic['tier']) => {
-    switch (tier) {
+  const getTierBadge = (row: Clinic) => {
+    if (row.packageAssigned === false) return <Badge variant="neutral">Unassigned</Badge>;
+    switch (row.tier) {
       case 'ENTERPRISE':
-        return <Badge variant="purple">₹25k Enterprise</Badge>;
+        return <Badge variant="purple">Scale</Badge>;
       case 'GROWTH':
         return <Badge variant="info">Growth</Badge>;
       case 'STARTER':
-        return <Badge variant="neutral">Starter</Badge>;
+        return <Badge variant="neutral">Essential</Badge>;
       default:
-        return <Badge variant="neutral">{tier}</Badge>;
+        return <Badge variant="neutral">{row.tier}</Badge>;
     }
   };
 
@@ -129,8 +130,8 @@ export const ClinicListPage: React.FC = () => {
     },
     {
       key: 'tier',
-      header: 'Subscription Tier',
-      render: (row) => getTierBadge(row.tier),
+      header: 'Package',
+      render: (row) => getTierBadge(row),
     },
     {
       key: 'mrr',
@@ -275,10 +276,10 @@ export const ClinicListPage: React.FC = () => {
               className="select-field"
               style={{ width: '100%' }}
             >
-              <option value="ALL">All Subscription Tiers</option>
-              <option value="ENTERPRISE">Enterprise (₹25,000)</option>
-              <option value="GROWTH">Growth (₹16,999)</option>
-              <option value="STARTER">Starter (₹9,999)</option>
+              <option value="ALL">All packages</option>
+              <option value="ENTERPRISE">Scale (₹18,000)</option>
+              <option value="GROWTH">Growth (₹12,000)</option>
+              <option value="STARTER">Essential (₹10,000)</option>
             </select>
           </div>
         </div>

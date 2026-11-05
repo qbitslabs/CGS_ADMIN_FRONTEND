@@ -117,16 +117,16 @@ export const PlatformSettingsPage: React.FC = () => {
               step="0.01"
               value={aiRate}
               onChange={(e) => setAiRate(Number(e.target.value))}
-              hint="Google: Gemma 4 31B blended rate on OpenRouter"
+              hint="Applied when a clinic plan defines an AI overage rate"
               required
             />
 
             <Input
-              label="BullMQ Worker Task Concurrency"
+              label="Job worker concurrency"
               type="number"
               value={concurrency}
               onChange={(e) => setConcurrency(Number(e.target.value))}
-              hint="Concurrent jobs handled across background worker containers"
+              hint="How many background jobs this process handles at once"
               required
             />
 

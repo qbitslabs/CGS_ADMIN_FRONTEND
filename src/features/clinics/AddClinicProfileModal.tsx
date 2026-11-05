@@ -1,6 +1,7 @@
 /* Admin modal for clinics workflows.
  * Collects operator input and posts it to the CGS admin API. */
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -10,11 +11,269 @@ import { useToast } from '../../context/ToastContext';
 import { PlatformUser, PlatformUserRole } from '../../types';
 import { UserCheck, Stethoscope, User, Award, ShieldCheck } from 'lucide-react';
 
+const DOCTOR_SPECIALTIES: Record<string, string[]> = {
+  Dentist: [
+    'General Dentistry',
+    'Orthodontics & Invisible Aligners',
+    'Implantology & Oral Surgery',
+    'Endodontics (Root Canal)',
+    'Prosthodontics & Crown / Bridge',
+    'Periodontics & Gum Care',
+    'Pedodontics (Child Dental)',
+    'Aesthetic & Cosmetic Dentistry',
+    'Oral & Maxillofacial Surgery',
+  ],
+  Dermatologist: [
+    'General Dermatology',
+    'Acne & Pigmentation',
+    'Hair & Scalp (Trichology)',
+    'Cosmetic Dermatology',
+    'Pediatric Dermatology',
+    'Dermatosurgery',
+    'Psoriasis & Eczema',
+    'Vitiligo',
+    'Laser & Aesthetic Dermatology',
+    'Nail Disorders',
+    'Allergy & Contact Dermatitis',
+    'Sexually Transmitted Infections',
+  ],
+  Neurologist: [
+    'General Neurology',
+    'Stroke & Vascular Neurology',
+    'Epilepsy',
+    'Headache & Migraine',
+    'Pediatric Neurology',
+    'Neuromuscular Disorders',
+    'Movement Disorders & Parkinson’s',
+    'Memory & Dementia',
+    'Multiple Sclerosis',
+    'Sleep Neurology',
+    'Neurocritical Care',
+    'Spine & Nerve Pain',
+  ],
+  Physiotherapist: [
+    'Musculoskeletal Physiotherapy',
+    'Sports Physiotherapy',
+    'Neuro Physiotherapy',
+    'Pediatric Physiotherapy',
+    'Cardiopulmonary Physiotherapy',
+    'Orthopedic Rehabilitation',
+    'Post-surgical Rehabilitation',
+    'Women’s Health Physiotherapy',
+    'Geriatric Physiotherapy',
+    'Vestibular & Balance',
+    'Hand Therapy',
+    'Pain Management',
+  ],
+  'General Physician': [
+    'General Medicine',
+    'Family Medicine',
+    'Internal Medicine',
+    'Diabetes Care',
+    'Hypertension & Lifestyle Disease',
+    'Infectious Disease',
+    'Thyroid & Endocrine Care',
+    'Geriatric Medicine',
+    'Fever & Acute Care',
+    'Preventive Health Check',
+  ],
+  Gynecologist: [
+    'Obstetrics & Gynecology',
+    'Infertility & IVF',
+    'High-risk Pregnancy',
+    'Gynecologic Surgery',
+    'PCOS & Hormonal Disorders',
+    'Menopause Care',
+    'Adolescent Gynecology',
+    'Laparoscopy & Minimally Invasive Surgery',
+    'Fetal Medicine',
+    'Family Planning',
+  ],
+  Orthopedic: [
+    'General Orthopedics',
+    'Joint Replacement',
+    'Sports Injury',
+    'Spine',
+    'Pediatric Orthopedics',
+    'Trauma & Fracture',
+    'Arthroscopy',
+    'Hand & Wrist',
+    'Foot & Ankle',
+    'Shoulder & Elbow',
+  ],
+  'ENT Specialist': [
+    'General ENT',
+    'Otology (Ear)',
+    'Rhinology (Nose)',
+    'Head & Neck',
+    'Pediatric ENT',
+    'Cochlear Implant & Hearing',
+    'Sinus & Allergy',
+    'Voice & Laryngology',
+    'Sleep Apnea & Snoring',
+  ],
+  Ophthalmologist: [
+    'General Ophthalmology',
+    'Cataract',
+    'Retina',
+    'Glaucoma',
+    'Pediatric Ophthalmology',
+    'Cornea',
+    'Refractive Surgery (LASIK)',
+    'Oculoplasty',
+    'Neuro-ophthalmology',
+    'Squint',
+  ],
+  Pediatrician: [
+    'General Pediatrics',
+    'Neonatology',
+    'Pediatric Allergy',
+    'Adolescent Medicine',
+    'Pediatric Pulmonology',
+    'Pediatric Gastroenterology',
+    'Pediatric Endocrinology',
+    'Developmental Pediatrics',
+    'Vaccination & Well-child Care',
+  ],
+  Psychiatrist: [
+    'General Psychiatry',
+    'Child & Adolescent Psychiatry',
+    'Addiction Psychiatry',
+    'Anxiety & Mood Disorders',
+    'Geriatric Psychiatry',
+    'Women’s Mental Health',
+    'Psychosomatic Medicine',
+    'Sleep Disorders',
+  ],
+  Cardiologist: [
+    'General Cardiology',
+    'Interventional Cardiology',
+    'Preventive Cardiology',
+    'Heart Failure',
+    'Electrophysiology & Arrhythmia',
+    'Pediatric Cardiology',
+    'Hypertension',
+    'Cardiac Rehabilitation',
+  ],
+  Other: [],
+};
+
+const DOCTOR_TYPES = Object.keys(DOCTOR_SPECIALTIES);
+
+function ScrollSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setBox({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    };
+    place();
+    const onDoc = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    window.addEventListener('mousedown', onDoc);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', width: '100%' }}>
+      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>{label}</span>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="select-field"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        style={{ textAlign: 'left', cursor: 'pointer' }}
+      >
+        {value}
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="listbox"
+            style={{
+              position: 'fixed',
+              top: box.top,
+              left: box.left,
+              width: box.width,
+              zIndex: 1100,
+              maxHeight: 168,
+              overflowY: 'auto',
+              background: '#ffffff',
+              border: '1px solid var(--border-light)',
+              borderRadius: 'var(--radius-md)',
+              boxShadow: 'var(--shadow-dropdown)',
+            }}
+          >
+            {options.map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="option"
+                aria-selected={item === value}
+                onClick={() => {
+                  onChange(item);
+                  setOpen(false);
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '7px 12px',
+                  border: 'none',
+                  background: item === value ? '#eff6ff' : 'transparent',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                {item}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 export interface AddClinicProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   clinicId: string;
   clinicName: string;
+  seats?: {
+    enforced: boolean;
+    doctors: { used: number; allowed: number | null };
+    staff: { used: number; allowed: number | null };
+  };
   onSuccess: (newUser: PlatformUser) => void;
 }
 
@@ -23,6 +282,7 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
   onClose,
   clinicId,
   clinicName,
+  seats,
   onSuccess,
 }) => {
   const [profileType, setProfileType] = useState<'DOCTOR' | 'EMPLOYEE'>('DOCTOR');
@@ -31,11 +291,14 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // Doctor Specific Fields
-  const [specialization, setSpecialization] = useState('Orthodontics & Aligners');
+  const [doctorType, setDoctorType] = useState('Dentist');
+  const [specialization, setSpecialization] = useState(DOCTOR_SPECIALTIES.Dentist[0]);
   const [registrationNumber, setRegistrationNumber] = useState('');
-  const [qualification, setQualification] = useState('BDS, MDS');
+  const [qualification, setQualification] = useState('');
   const [experienceYears, setExperienceYears] = useState<number>(6);
   const [consultationFee, setConsultationFee] = useState<number>(800);
 
@@ -55,7 +318,19 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
     }
 
     if (profileType === 'DOCTOR' && !registrationNumber.trim()) {
-      setError('Please provide the Dental Council Registration / License number for the Doctor.');
+      setError('Please provide the registration or license number for the doctor.');
+      return;
+    }
+    if (profileType === 'DOCTOR' && !specialization.trim()) {
+      setError('Please enter the clinical specialization.');
+      return;
+    }
+    if (!password.trim() || password.length < 6) {
+      setError('Enter a password of at least 6 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Password and confirm password do not match.');
       return;
     }
 
@@ -68,10 +343,10 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
         email,
         phone,
         role: profileType as PlatformUserRole,
-        designation: profileType === 'EMPLOYEE' ? designation : `Specialist in ${specialization}`,
+        designation: profileType === 'EMPLOYEE' ? designation : doctorType,
         ...(profileType === 'DOCTOR'
           ? {
-              specialization,
+              specialization: `${doctorType} — ${specialization.trim()}`,
               registrationNumber,
               qualification,
               experienceYears: Number(experienceYears),
@@ -80,7 +355,10 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
           : {}),
       };
 
-      const created = await clinicsApi.addClinicUserProfile(clinicId, payload);
+      const created = await clinicsApi.addClinicUserProfile(clinicId, {
+        ...payload,
+        password,
+      } as Partial<PlatformUser> & { password: string });
       success(
         `${profileType === 'DOCTOR' ? 'Doctor' : 'Staff'} Profile Registered`,
         `${created.name} added to ${clinicName}.`
@@ -93,6 +371,15 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
       setIsLoading(false);
     }
   };
+
+  const seat = profileType === 'DOCTOR' ? seats?.doctors : seats?.staff;
+  const atLimit = Boolean(seats?.enforced && seat && seat.allowed != null && seat.used >= seat.allowed);
+  const seatLabel = profileType === 'DOCTOR' ? 'Doctors' : 'Staff';
+  const seatLine = !seat
+    ? ''
+    : seats?.enforced && seat.allowed != null
+      ? `${seatLabel} ${seat.used} of ${seat.allowed}`
+      : `${seatLabel} in use: ${seat.used}. Limits start when this clinic is placed on Essential, Growth, or Scale.`;
 
   return (
     <Modal
@@ -111,7 +398,7 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
           <Button variant="secondary" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleSubmit} isLoading={isLoading}>
+          <Button variant="primary" onClick={handleSubmit} isLoading={isLoading} disabled={atLimit}>
             Save {profileType === 'DOCTOR' ? 'Doctor Profile' : 'Staff Profile'}
           </Button>
         </>
@@ -228,6 +515,12 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
           </div>
         </div>
 
+        {seatLine && (
+          <div style={{ padding: '10px 12px', background: 'var(--c-slate-50)', borderRadius: '8px', fontSize: '13px', color: atLimit ? 'var(--status-error)' : 'var(--text-secondary)' }}>
+            {atLimit ? `This clinic is at its ${profileType === 'DOCTOR' ? 'doctor' : 'staff'} limit (${seat?.used} of ${seat?.allowed}).` : seatLine}
+          </div>
+        )}
+
         {/* Common Details */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
           <Input
@@ -255,6 +548,27 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
           required
         />
 
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+          <Input
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Min. 6 characters"
+            autoComplete="new-password"
+            required
+          />
+          <Input
+            label="Confirm Password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Re-enter password"
+            autoComplete="new-password"
+            required
+          />
+        </div>
+
         {/* DOCTOR SPECIFIC FIELDS */}
         {profileType === 'DOCTOR' && (
           <div
@@ -275,36 +589,48 @@ export const AddClinicProfileModal: React.FC<AddClinicProfileModalProps> = ({
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-              <Select
-                label="Clinical Specialization"
-                value={specialization}
-                onChange={(e) => setSpecialization(e.target.value)}
-              >
-                <option value="Orthodontics & Aligners">Orthodontics & Invisible Aligners</option>
-                <option value="Implantology & Oral Surgery">Implantology & Oral Surgery</option>
-                <option value="Endodontics & Root Canal">Endodontics (Root Canal Specialist)</option>
-                <option value="Prosthodontics & Crown/Bridge">Prosthodontics & Crown / Bridge</option>
-                <option value="Periodontics & Gum Surgery">Periodontics & Gum Care</option>
-                <option value="Pedodontics (Pediatric)">Pedodontics (Child Dental Specialist)</option>
-                <option value="Aesthetic & Cosmetic Dentistry">Aesthetic & Cosmetic Dentistry</option>
-                <option value="General Dental Surgeon">General Dental Surgeon</option>
-              </Select>
-
-              <Input
-                label="Dental Council License # (DCI Reg)"
-                value={registrationNumber}
-                onChange={(e) => setRegistrationNumber(e.target.value)}
-                placeholder="e.g. DCI-MH-2024-88912"
-                required
+              <ScrollSelect
+                label="Doctor type"
+                value={doctorType}
+                options={DOCTOR_TYPES}
+                onChange={(nextType) => {
+                  setDoctorType(nextType);
+                  setSpecialization(DOCTOR_SPECIALTIES[nextType]?.[0] || '');
+                }}
               />
+
+              {doctorType === 'Other' ? (
+                <Input
+                  label="Clinical Specialization"
+                  value={specialization}
+                  onChange={(e) => setSpecialization(e.target.value)}
+                  placeholder="Enter the specialization"
+                  required
+                />
+              ) : (
+                <ScrollSelect
+                  label="Clinical Specialization"
+                  value={specialization}
+                  options={DOCTOR_SPECIALTIES[doctorType] || []}
+                  onChange={setSpecialization}
+                />
+              )}
             </div>
+
+            <Input
+              label={doctorType === 'Dentist' ? 'Dental Council License # (DCI Reg)' : 'Registration / License number'}
+              value={registrationNumber}
+              onChange={(e) => setRegistrationNumber(e.target.value)}
+              placeholder={doctorType === 'Dentist' ? 'e.g. DCI-MH-2024-88912' : 'Council registration number'}
+              required
+            />
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               <Input
                 label="Degrees / Qualification"
                 value={qualification}
                 onChange={(e) => setQualification(e.target.value)}
-                placeholder="BDS, MDS"
+                placeholder={doctorType === 'Dentist' ? 'BDS, MDS' : 'MBBS, MD'}
               />
 
               <Input

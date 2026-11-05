@@ -310,6 +310,21 @@ select:-webkit-autofill {
   text-align: left;
 }
 
+.table-container.table-fit table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.table-container.table-fit th,
+.table-container.table-fit td {
+  padding: 10px 8px;
+}
+
+.table-container.table-fit th {
+  white-space: normal;
+  letter-spacing: 0.02em;
+}
+
 .table-container th {
   background-color: var(--c-slate-50);
   color: var(--c-slate-600);

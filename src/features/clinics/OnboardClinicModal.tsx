@@ -6,10 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Plus,
-  Trash2,
   Wifi,
-  MessageSquare,
   Sparkles,
 } from 'lucide-react';
 import { Modal } from '../../components/ui/Modal';
@@ -28,49 +25,38 @@ export interface OnboardClinicModalProps {
 
 const STEPS = [
   'Clinic Details',
+  'Add-ons',
   'Landing Page',
   'WhatsApp Setup',
   'AI Configuration',
-  'Clinic Workflow',
-  'Admin & Staff',
   'Review & Submit',
 ] as const;
 
-const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-const DEFAULT_PERMISSIONS = [
-  'Manage Leads',
-  'Manage Appointments',
-  'Manage Doctors',
-  'Manage Services',
-  'Manage WhatsApp',
-  'Manage AI Configuration',
-  'View Reports',
-  'Manage Staff',
+const ADDON_CHOICES = [
+  { type: 'EXTRA_DOCTOR', label: 'Extra doctor', price: '₹1,000 / month', tiers: ['STARTER', 'GROWTH', 'ENTERPRISE'] },
+  { type: 'EXTRA_STAFF', label: 'Extra staff member', price: '₹500 / month', tiers: ['STARTER', 'GROWTH', 'ENTERPRISE'] },
+  { type: 'EXTRA_AI_REPLIES', label: 'Extra 300 AI replies', price: '₹500 this period', tiers: ['STARTER', 'GROWTH', 'ENTERPRISE'] },
+  { type: 'EXTRA_WHATSAPP_NUMBER', label: 'Extra WhatsApp number', price: '₹1,500 / month', tiers: ['STARTER', 'GROWTH', 'ENTERPRISE'] },
+  { type: 'PRIORITY_SUPPORT', label: 'Priority support', price: '₹2,000 / month', tiers: ['STARTER', 'GROWTH'] },
 ];
-
-const WORKFLOW_STEPS = [
-  'New Lead',
-  'AI Conversation',
-  'Lead Qualification',
-  'Appointment Booking',
-  'Confirmation',
-  'Reminder',
-  'Follow-up',
+const EXTRA_AUTOMATIONS = [
+  { key: 'MISSED_APPOINTMENT', label: 'Missed appointment' },
+  { key: 'COMPLETED_VISIT', label: 'Completed-visit follow-up' },
+  { key: 'PATIENT_REACTIVATION', label: 'Patient reactivation' },
 ];
+const INCLUDED_AUTOMATIONS: Record<string, string[]> = {
+  STARTER: ['New enquiry', 'Invoice', 'Appointment reminder'],
+  GROWTH: ['New enquiry', 'Invoice', 'Appointment reminder', 'Missed appointment', 'Completed-visit follow-up'],
+  ENTERPRISE: ['New enquiry', 'Invoice', 'Appointment reminder', 'Missed appointment', 'Completed-visit follow-up', 'Patient reactivation'],
+};
 
-type StaffRole = 'CLINIC_ADMIN' | 'DOCTOR' | 'RECEPTIONIST' | 'STAFF';
-
-interface StaffMember {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  password: string;
-  confirmPassword: string;
-  roleLabel: StaffRole;
-  permissions: string[];
+interface SelectedAddon {
+  type: string;
+  quantity: number;
+  automationKey?: string;
 }
+
+const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 interface FormState {
   name: string;
@@ -83,15 +69,13 @@ interface FormState {
   openingTime: string;
   closingTime: string;
   tier: SubscriptionTier;
+  earlyBird: boolean;
+  addons: SelectedAddon[];
   landingTitle: string;
   landingShortDescription: string;
   primaryCta: string;
   landingWhatsapp: string;
   enquiryFormEnabled: boolean;
-  landingAddress: string;
-  landingAdditionalInfo: string;
-  selectedServices: string[];
-  selectedDoctors: string[];
   waBusinessAccountId: string;
   waPhoneNumberId: string;
   waDisplayPhone: string;
@@ -100,12 +84,6 @@ interface FormState {
   webhookUrl: string;
   verifyToken: string;
   webhookStatus: string;
-  tplWelcome: string;
-  tplLeadQualification: string;
-  tplAppointmentConfirmation: string;
-  tplAppointmentReminder: string;
-  tplFollowUp: string;
-  tplNoResponse: string;
   waConnectionStatus: 'Connected' | 'Not Connected' | 'Testing';
   clinicInformation: string;
   faqs: string;
@@ -113,28 +91,8 @@ interface FormState {
   aiTone: string;
   conversationInstructions: string;
   greetingMessage: string;
-  qualificationEnabled: boolean;
-  appointmentEnabled: boolean;
-  reminderEnabled: boolean;
-  followUpEnabled: boolean;
-  noResponseEnabled: boolean;
-  staffHandoffEnabled: boolean;
-  followUpHours: number;
-  reminderHoursBefore: number;
-  staff: StaffMember[];
   confirmed: boolean;
 }
-
-const emptyStaff = (): StaffMember => ({
-  id: `staff_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-  name: '',
-  email: '',
-  phone: '',
-  password: '',
-  confirmPassword: '',
-  roleLabel: 'STAFF',
-  permissions: ['Manage Leads', 'Manage Appointments'],
-});
 
 const initialForm = (): FormState => ({
   name: '',
@@ -147,15 +105,13 @@ const initialForm = (): FormState => ({
   openingTime: '09:00',
   closingTime: '19:00',
   tier: 'GROWTH',
+  earlyBird: false,
+  addons: [],
   landingTitle: '',
   landingShortDescription: '',
   primaryCta: 'Book Appointment on WhatsApp',
   landingWhatsapp: '',
   enquiryFormEnabled: true,
-  landingAddress: '',
-  landingAdditionalInfo: '',
-  selectedServices: [],
-  selectedDoctors: [],
   waBusinessAccountId: '',
   waPhoneNumberId: '',
   waDisplayPhone: '',
@@ -164,12 +120,6 @@ const initialForm = (): FormState => ({
   webhookUrl: '',
   verifyToken: '',
   webhookStatus: 'PENDING',
-  tplWelcome: 'Welcome to our clinic! How can we help you today?',
-  tplLeadQualification: 'To assist you better, may I know which service you need?',
-  tplAppointmentConfirmation: 'Your appointment is confirmed. We look forward to seeing you!',
-  tplAppointmentReminder: 'Reminder: You have an appointment tomorrow. Reply YES to confirm.',
-  tplFollowUp: 'How was your visit? We would love your feedback.',
-  tplNoResponse: 'We tried reaching you. Reply anytime and we will help.',
   waConnectionStatus: 'Not Connected',
   clinicInformation: '',
   faqs: '',
@@ -177,26 +127,6 @@ const initialForm = (): FormState => ({
   aiTone: 'professional',
   conversationInstructions: 'Be helpful, concise, and guide patients toward booking.',
   greetingMessage: 'Hello! Welcome to our clinic. How can I help you today?',
-  qualificationEnabled: true,
-  appointmentEnabled: true,
-  reminderEnabled: true,
-  followUpEnabled: true,
-  noResponseEnabled: true,
-  staffHandoffEnabled: true,
-  followUpHours: 24,
-  reminderHoursBefore: 24,
-  staff: [
-    {
-      id: 'staff_primary',
-      name: '',
-      email: '',
-      phone: '',
-      password: '',
-      confirmPassword: '',
-      roleLabel: 'CLINIC_ADMIN',
-      permissions: [...DEFAULT_PERMISSIONS],
-    },
-  ],
   confirmed: false,
 });
 
@@ -299,20 +229,16 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
 }) => {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<FormState>(initialForm);
-  const [serviceDraft, setServiceDraft] = useState('');
-  const [doctorDraft, setDoctorDraft] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [successClinic, setSuccessClinic] = useState<Clinic | null>(null);
-  const [successLoginEmail, setSuccessLoginEmail] = useState('');
   const [reviewOpen, setReviewOpen] = useState<Record<string, boolean>>({
     clinic: true,
+    addons: false,
     landing: false,
     whatsapp: false,
     ai: false,
-    workflow: false,
-    staff: false,
   });
 
   const { success } = useToast();
@@ -331,35 +257,10 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
   const resetAndClose = () => {
     setStep(0);
     setForm(initialForm());
-    setServiceDraft('');
-    setDoctorDraft('');
     setErrors({});
     setSubmitError('');
     setSuccessClinic(null);
-    setSuccessLoginEmail('');
     onClose();
-  };
-
-  const addService = () => {
-    const name = serviceDraft.trim();
-    if (!name) return;
-    if (form.selectedServices.some((s) => s.toLowerCase() === name.toLowerCase())) {
-      setServiceDraft('');
-      return;
-    }
-    patch('selectedServices', [...form.selectedServices, name]);
-    setServiceDraft('');
-  };
-
-  const addDoctor = () => {
-    const name = doctorDraft.trim();
-    if (!name) return;
-    if (form.selectedDoctors.some((d) => d.toLowerCase() === name.toLowerCase())) {
-      setDoctorDraft('');
-      return;
-    }
-    patch('selectedDoctors', [...form.selectedDoctors, name]);
-    setDoctorDraft('');
   };
 
   const validateStep = (index: number): boolean => {
@@ -375,33 +276,18 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
       if (!form.openingTime) nextErrors.openingTime = 'Opening time is required';
       if (!form.closingTime) nextErrors.closingTime = 'Closing time is required';
     }
-    if (index === 1) {
+    if (index === 2) {
       if (!form.landingTitle.trim()) nextErrors.landingTitle = 'Landing page title is required';
       if (!form.landingShortDescription.trim()) {
         nextErrors.landingShortDescription = 'Short description is required';
       }
       if (!form.primaryCta.trim()) nextErrors.primaryCta = 'Primary CTA is required';
     }
-    if (index === 3) {
+    if (index === 4) {
       if (!form.receptionistName.trim()) nextErrors.receptionistName = 'AI receptionist name is required';
       if (!form.greetingMessage.trim()) nextErrors.greetingMessage = 'Greeting message is required';
     }
     if (index === 5) {
-      form.staff.forEach((s, i) => {
-        if (!s.name.trim()) nextErrors[`staff_${i}_name`] = 'Name is required';
-        if (!s.email.trim()) nextErrors[`staff_${i}_email`] = 'Email is required';
-        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email)) {
-          nextErrors[`staff_${i}_email`] = 'Invalid email';
-        }
-        if (!s.password.trim()) nextErrors[`staff_${i}_password`] = 'Password is required';
-        else if (s.password.length < 6) nextErrors[`staff_${i}_password`] = 'Minimum 6 characters';
-        if (!s.confirmPassword.trim()) nextErrors[`staff_${i}_confirm`] = 'Confirm password';
-        else if (s.password !== s.confirmPassword) {
-          nextErrors[`staff_${i}_confirm`] = 'Passwords do not match';
-        }
-      });
-    }
-    if (index === 6) {
       if (!form.confirmed) nextErrors.confirmed = 'Please confirm before submitting';
     }
     setErrors(nextErrors);
@@ -433,9 +319,6 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
   };
 
   const buildPayload = () => {
-    const services = form.selectedServices.map((name) => ({ name }));
-    const doctors = form.selectedDoctors.map((name) => ({ name }));
-
     return {
       name: form.name.trim(),
       email: form.email.trim(),
@@ -447,18 +330,14 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
       openingTime: form.openingTime,
       closingTime: form.closingTime,
       tier: form.tier,
-      doctorName: form.staff.find((s) => s.roleLabel === 'DOCTOR' || s.roleLabel === 'CLINIC_ADMIN')
-        ?.name,
+      earlyBird: form.earlyBird,
+      addons: form.addons.filter((addon) => addon.quantity > 0),
       landingPage: {
         title: form.landingTitle.trim(),
         shortDescription: form.landingShortDescription.trim(),
         primaryCta: form.primaryCta.trim(),
         whatsappNumber: form.landingWhatsapp.trim() || form.phone.trim(),
         enquiryFormEnabled: form.enquiryFormEnabled,
-        services,
-        doctors,
-        address: form.landingAddress.trim() || form.address.trim(),
-        additionalInfo: form.landingAdditionalInfo.trim() || undefined,
       },
       whatsapp:
         form.waPhoneNumberId && form.waAccessToken
@@ -471,14 +350,6 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
               webhookUrl: form.webhookUrl || undefined,
               verifyToken: form.verifyToken || undefined,
               webhookStatus: form.webhookStatus || 'PENDING',
-              messageTemplates: {
-                welcome: form.tplWelcome,
-                leadQualification: form.tplLeadQualification,
-                appointmentConfirmation: form.tplAppointmentConfirmation,
-                appointmentReminder: form.tplAppointmentReminder,
-                followUp: form.tplFollowUp,
-                noResponse: form.tplNoResponse,
-              },
             }
           : undefined,
       ai: {
@@ -490,36 +361,16 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
         faqs: form.faqs,
         isAiEnabled: true,
       },
-      workflow: {
-        qualificationEnabled: form.qualificationEnabled,
-        appointmentEnabled: form.appointmentEnabled,
-        reminderEnabled: form.reminderEnabled,
-        followUpEnabled: form.followUpEnabled,
-        noResponseEnabled: form.noResponseEnabled,
-        staffHandoffEnabled: form.staffHandoffEnabled,
-        followUpHours: form.followUpHours,
-        reminderHoursBefore: form.reminderHoursBefore,
-      },
-      staff: form.staff.map((s) => ({
-        name: s.name.trim(),
-        email: s.email.trim(),
-        phone: s.phone.trim() || undefined,
-        password: s.password,
-        roleLabel: s.roleLabel,
-        permissions: s.permissions,
-      })),
-      services,
     };
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(6)) return;
+    if (!validateStep(STEPS.length - 1)) return;
     setIsLoading(true);
     setSubmitError('');
     try {
       const created = await clinicsApi.createClinic(buildPayload() as any);
       setSuccessClinic(created);
-      setSuccessLoginEmail(form.staff[0]?.email?.trim() || form.email.trim());
       success('Clinic created successfully.', `${created.name} is ready on the platform.`);
       onSuccess(created);
     } catch (err: any) {
@@ -539,12 +390,45 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
     });
   };
 
-  const updateStaff = (id: string, patchStaff: Partial<StaffMember>) => {
+  const addonSelected = (type: string, automationKey?: string) =>
+    form.addons.some((addon) => addon.type === type && addon.automationKey === automationKey);
+
+  const toggleAddon = (type: string, automationKey?: string) => {
+    setForm((prev) => {
+      const exists = prev.addons.some((addon) => addon.type === type && addon.automationKey === automationKey);
+      return {
+        ...prev,
+        addons: exists
+          ? prev.addons.filter((addon) => !(addon.type === type && addon.automationKey === automationKey))
+          : [...prev.addons, { type, quantity: 1, automationKey }],
+      };
+    });
+  };
+
+  const setAddonQuantity = (type: string, automationKey: string | undefined, quantity: number) => {
+    const next = Math.min(20, Math.max(1, quantity || 1));
     setForm((prev) => ({
       ...prev,
-      staff: prev.staff.map((s) => (s.id === id ? { ...s, ...patchStaff } : s)),
+      addons: prev.addons.map((addon) =>
+        addon.type === type && addon.automationKey === automationKey ? { ...addon, quantity: next } : addon
+      ),
     }));
   };
+
+  const changePackage = (tier: SubscriptionTier) => {
+    setForm((prev) => ({
+      ...prev,
+      tier,
+      addons: prev.addons.filter((addon) => {
+        if (addon.type === 'EXTRA_AUTOMATION') {
+          if (tier === 'STARTER') return true;
+          return tier === 'GROWTH' && addon.automationKey === 'PATIENT_REACTIVATION';
+        }
+        return ADDON_CHOICES.some((choice) => choice.type === addon.type && choice.tiers.includes(tier));
+      }),
+    }));
+  };
+
 
   const renderStepper = () => (
     <div
@@ -716,13 +600,6 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
                 {(successClinic as any).landingPageId || '—'}
               </strong>
             </p>
-            {successLoginEmail && (
-              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
-                Clinic login: use <strong style={{ color: 'var(--text-primary)' }}>{successLoginEmail}</strong> and the
-                password set in Admin &amp; Staff at{' '}
-                <strong style={{ color: 'var(--text-primary)' }}>http://localhost:3000/login</strong>
-              </p>
-            )}
           </div>
         ) : (
           <>
@@ -766,21 +643,91 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
                   <Input label="Opening Time" required type="time" value={form.openingTime} error={errors.openingTime} onChange={(e) => patch('openingTime', e.target.value)} />
                   <Input label="Closing Time" required type="time" value={form.closingTime} error={errors.closingTime} onChange={(e) => patch('closingTime', e.target.value)} />
                   <Select
-                    label="Subscription Tier"
+                    label="Package"
                     value={form.tier}
-                    onChange={(e) => patch('tier', e.target.value as SubscriptionTier)}
+                    onChange={(e) => changePackage(e.target.value as SubscriptionTier)}
                     options={[
-                      { value: 'STARTER', label: 'Starter' },
-                      { value: 'GROWTH', label: 'Growth' },
-                      { value: 'ENTERPRISE', label: 'Enterprise' },
-                      { value: 'CUSTOM', label: 'Custom' },
+                      { value: 'STARTER', label: 'Essential · ₹10,000 / month' },
+                      { value: 'GROWTH', label: 'Growth · ₹12,000 / month' },
+                      { value: 'ENTERPRISE', label: 'Scale · ₹18,000 / month' },
                     ]}
                   />
                 </div>
+                <ToggleRow
+                  label="Early Bird"
+                  checked={form.earlyBird}
+                  onChange={(v) => patch('earlyBird', v)}
+                  hint="Essential ₹8,000, Growth ₹10,000, Scale ₹15,000. Limited to five clinics."
+                />
               </div>
             )}
 
             {step === 1 && (
+              <div style={sectionStyle}>
+                <div style={sectionTitleStyle}>Add-ons</div>
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+                  Optional extras for {form.tier === 'STARTER' ? 'Essential' : form.tier === 'ENTERPRISE' ? 'Scale' : 'Growth'}.
+                  They are saved as pending until payment is confirmed on the clinic package page.
+                </p>
+                {ADDON_CHOICES.filter((choice) => choice.tiers.includes(form.tier)).map((choice) => {
+                  const selected = addonSelected(choice.type);
+                  const quantity = form.addons.find((addon) => addon.type === choice.type)?.quantity || 1;
+                  return (
+                    <label key={choice.type} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                      <input type="checkbox" checked={selected} onChange={() => toggleAddon(choice.type)} />
+                      <span style={{ flex: 1 }}>{choice.label} · {choice.price}</span>
+                      {selected && (
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={quantity}
+                          onClick={(event) => event.preventDefault()}
+                          onChange={(event) => setAddonQuantity(choice.type, undefined, Number(event.target.value))}
+                          style={{ width: 72, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border-light)' }}
+                        />
+                      )}
+                    </label>
+                  );
+                })}
+                <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+                  WhatsApp automations on this package: {(INCLUDED_AUTOMATIONS[form.tier] || []).join(', ')}.
+                  {form.tier === 'STARTER'
+                    ? ' The three below can be added at ₹500 / month.'
+                    : form.tier === 'GROWTH'
+                      ? ' Patient reactivation can be added at ₹500 / month.'
+                      : ' All six WhatsApp automations are included.'}
+                </p>
+                {(form.tier === 'STARTER'
+                  ? EXTRA_AUTOMATIONS
+                  : form.tier === 'GROWTH'
+                    ? EXTRA_AUTOMATIONS.filter((automation) => automation.key === 'PATIENT_REACTIVATION')
+                    : []
+                ).map((automation) => {
+                  const selected = addonSelected('EXTRA_AUTOMATION', automation.key);
+                  const quantity = form.addons.find((addon) => addon.automationKey === automation.key)?.quantity || 1;
+                  return (
+                    <label key={automation.key} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                      <input type="checkbox" checked={selected} onChange={() => toggleAddon('EXTRA_AUTOMATION', automation.key)} />
+                      <span style={{ flex: 1 }}>{automation.label} · ₹500 / month</span>
+                      {selected && (
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={quantity}
+                          onClick={(event) => event.preventDefault()}
+                          onChange={(event) => setAddonQuantity('EXTRA_AUTOMATION', automation.key, Number(event.target.value))}
+                          style={{ width: 72, padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border-light)' }}
+                        />
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {step === 2 && (
               <div style={sectionStyle}>
                 <div style={sectionTitleStyle}>Landing Page Configuration</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -790,123 +737,10 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
                   <ToggleRow label="Enquiry Form" checked={form.enquiryFormEnabled} onChange={(v) => patch('enquiryFormEnabled', v)} hint="Enable enquiry form on landing page" />
                 </div>
                 <TextAreaField label="Short Description" required value={form.landingShortDescription} error={errors.landingShortDescription} onChange={(v) => patch('landingShortDescription', v)} />
-
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Services</div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                    <Input
-                      label=""
-                      value={serviceDraft}
-                      onChange={(e) => setServiceDraft(e.target.value)}
-                      placeholder="e.g. Root Canal"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addService();
-                        }
-                      }}
-                    />
-                    <Button variant="primary" onClick={addService} style={{ flexShrink: 0, height: 40 }}>
-                      Add
-                    </Button>
-                  </div>
-                  {form.selectedServices.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-                      {form.selectedServices.map((s) => (
-                        <div
-                          key={s}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '8px 12px',
-                            border: '1px solid var(--border-light)',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            background: '#fafbfc',
-                          }}
-                        >
-                          <span>{s}</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              patch(
-                                'selectedServices',
-                                form.selectedServices.filter((x) => x !== s)
-                              )
-                            }
-                            style={{ border: 'none', background: 'none', color: 'var(--status-error)', cursor: 'pointer', display: 'flex' }}
-                            aria-label={`Remove ${s}`}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>Doctors</div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-                    <Input
-                      label=""
-                      value={doctorDraft}
-                      onChange={(e) => setDoctorDraft(e.target.value)}
-                      placeholder="Doctor name"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addDoctor();
-                        }
-                      }}
-                    />
-                    <Button variant="primary" onClick={addDoctor} style={{ flexShrink: 0, height: 40 }}>
-                      Add
-                    </Button>
-                  </div>
-                  {form.selectedDoctors.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-                      {form.selectedDoctors.map((d) => (
-                        <div
-                          key={d}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '8px 12px',
-                            border: '1px solid var(--border-light)',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            background: '#fafbfc',
-                          }}
-                        >
-                          <span>{d}</span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              patch(
-                                'selectedDoctors',
-                                form.selectedDoctors.filter((x) => x !== d)
-                              )
-                            }
-                            style={{ border: 'none', background: 'none', color: 'var(--status-error)', cursor: 'pointer', display: 'flex' }}
-                            aria-label={`Remove ${d}`}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <Input label="Clinic Address" value={form.landingAddress} onChange={(e) => patch('landingAddress', e.target.value)} />
-                <TextAreaField label="Additional Information" value={form.landingAdditionalInfo} onChange={(v) => patch('landingAdditionalInfo', v)} />
               </div>
             )}
 
-            {step === 2 && (
+            {step === 3 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={sectionStyle}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -967,19 +801,10 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
                     />
                   </div>
                 </div>
-                <div style={sectionStyle}>
-                  <div style={sectionTitleStyle}>Message Templates</div>
-                  <TextAreaField label="Welcome Message" value={form.tplWelcome} onChange={(v) => patch('tplWelcome', v)} rows={2} />
-                  <TextAreaField label="Lead Qualification Message" value={form.tplLeadQualification} onChange={(v) => patch('tplLeadQualification', v)} rows={2} />
-                  <TextAreaField label="Appointment Confirmation" value={form.tplAppointmentConfirmation} onChange={(v) => patch('tplAppointmentConfirmation', v)} rows={2} />
-                  <TextAreaField label="Appointment Reminder" value={form.tplAppointmentReminder} onChange={(v) => patch('tplAppointmentReminder', v)} rows={2} />
-                  <TextAreaField label="Follow-up Message" value={form.tplFollowUp} onChange={(v) => patch('tplFollowUp', v)} rows={2} />
-                  <TextAreaField label="No Response Message" value={form.tplNoResponse} onChange={(v) => patch('tplNoResponse', v)} rows={2} />
-                </div>
               </div>
             )}
 
-            {step === 3 && (
+            {step === 4 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div style={sectionStyle}>
                   <div style={sectionTitleStyle}>Clinic Knowledge</div>
@@ -1010,140 +835,7 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
               </div>
             )}
 
-            {step === 4 && (
-              <div style={sectionStyle}>
-                <div style={sectionTitleStyle}>Clinic Workflow Configuration</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                  {WORKFLOW_STEPS.map((w, i) => (
-                    <React.Fragment key={w}>
-                      <span
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          padding: '8px 12px',
-                          borderRadius: 10,
-                          background: 'var(--c-primary-50)',
-                          color: 'var(--c-primary-800)',
-                          border: '1px solid var(--c-primary-200)',
-                        }}
-                      >
-                        {w}
-                      </span>
-                      {i < WORKFLOW_STEPS.length - 1 && <ChevronRight size={14} color="var(--text-muted)" />}
-                    </React.Fragment>
-                  ))}
-                </div>
-                <ToggleRow label="Qualification workflow" checked={form.qualificationEnabled} onChange={(v) => patch('qualificationEnabled', v)} />
-                <ToggleRow label="Appointment workflow" checked={form.appointmentEnabled} onChange={(v) => patch('appointmentEnabled', v)} />
-                <ToggleRow label="Appointment reminders" checked={form.reminderEnabled} onChange={(v) => patch('reminderEnabled', v)} />
-                <ToggleRow label="Follow-up automation" checked={form.followUpEnabled} onChange={(v) => patch('followUpEnabled', v)} />
-                <ToggleRow label="No-response handling" checked={form.noResponseEnabled} onChange={(v) => patch('noResponseEnabled', v)} />
-                <ToggleRow label="Staff handoff" checked={form.staffHandoffEnabled} onChange={(v) => patch('staffHandoffEnabled', v)} />
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <Input label="Follow-up timing (hours)" type="number" value={String(form.followUpHours)} onChange={(e) => patch('followUpHours', Number(e.target.value) || 24)} />
-                  <Input label="Reminder hours before appointment" type="number" value={String(form.reminderHoursBefore)} onChange={(e) => patch('reminderHoursBefore', Number(e.target.value) || 24)} />
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  Lead status transitions: New → Qualified → Booked → Confirmed → Completed / No-show
-                </div>
-              </div>
-            )}
-
             {step === 5 && (
-              <div style={sectionStyle}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={sectionTitleStyle}>Clinic Users</div>
-                  <Button variant="outline" size="sm" leftIcon={<Plus size={14} />} onClick={() => patch('staff', [...form.staff, emptyStaff()])}>
-                    Add Staff
-                  </Button>
-                </div>
-                {form.staff.map((member, index) => (
-                  <div
-                    key={member.id}
-                    style={{
-                      border: '1px solid var(--border-light)',
-                      borderRadius: 12,
-                      padding: 12,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <strong style={{ fontSize: 13 }}>Staff #{index + 1}</strong>
-                      {form.staff.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => patch('staff', form.staff.filter((s) => s.id !== member.id))}
-                          style={{ border: 'none', background: 'none', color: 'var(--status-error)', cursor: 'pointer' }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <Input label="Full Name" required value={member.name} error={errors[`staff_${index}_name`]} onChange={(e) => updateStaff(member.id, { name: e.target.value })} />
-                      <Input label="Email" required type="email" value={member.email} error={errors[`staff_${index}_email`]} onChange={(e) => updateStaff(member.id, { email: e.target.value })} />
-                      <Input label="Phone" value={member.phone} onChange={(e) => updateStaff(member.id, { phone: e.target.value })} />
-                      <Select
-                        label="Role"
-                        value={member.roleLabel}
-                        onChange={(e) => updateStaff(member.id, { roleLabel: e.target.value as StaffRole })}
-                        options={[
-                          { value: 'CLINIC_ADMIN', label: 'Clinic Admin' },
-                          { value: 'DOCTOR', label: 'Doctor' },
-                          { value: 'RECEPTIONIST', label: 'Receptionist' },
-                          { value: 'STAFF', label: 'Staff' },
-                        ]}
-                      />
-                      <Input
-                        label="Password"
-                        required
-                        type="password"
-                        value={member.password}
-                        error={errors[`staff_${index}_password`]}
-                        onChange={(e) => updateStaff(member.id, { password: e.target.value })}
-                        placeholder="Min. 6 characters"
-                        autoComplete="new-password"
-                      />
-                      <Input
-                        label="Confirm Password"
-                        required
-                        type="password"
-                        value={member.confirmPassword}
-                        error={errors[`staff_${index}_confirm`]}
-                        onChange={(e) => updateStaff(member.id, { confirmPassword: e.target.value })}
-                        placeholder="Re-enter password"
-                        autoComplete="new-password"
-                      />
-                    </div>
-                    <div>
-                      <div style={labelMuted}>Permissions</div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 6 }}>
-                        {DEFAULT_PERMISSIONS.map((p) => (
-                          <label key={p} style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <input
-                              type="checkbox"
-                              checked={member.permissions.includes(p)}
-                              onChange={() =>
-                                updateStaff(member.id, {
-                                  permissions: member.permissions.includes(p)
-                                    ? member.permissions.filter((x) => x !== p)
-                                    : [...member.permissions, p],
-                                })
-                              }
-                            />
-                            {p}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {step === 6 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {reviewSection('clinic', 'Clinic Details', 0, (
                   <>
@@ -1151,10 +843,22 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
                     <div>{form.email} · {form.phone}</div>
                     <div>{form.address}</div>
                     <div>{form.workingDays.join(', ')} · {form.openingTime}-{form.closingTime}</div>
-                    <div>Tier: {form.tier}</div>
+                    <div>
+                      Package: {form.tier === 'STARTER' ? 'Essential' : form.tier === 'ENTERPRISE' ? 'Scale' : 'Growth'}
+                      {form.earlyBird ? ' · Early Bird' : ''}
+                    </div>
                   </>
                 ))}
-                {reviewSection('landing', 'Landing Page', 1, (
+                {reviewSection('addons', 'Add-ons', 1, (
+                  <>
+                    {form.addons.length === 0 ? <div>None selected</div> : form.addons.map((addon) => (
+                      <div key={`${addon.type}-${addon.automationKey || ''}`}>
+                        {(addon.automationKey || addon.type).split('_').join(' ')} × {addon.quantity}
+                      </div>
+                    ))}
+                  </>
+                ))}
+                {reviewSection('landing', 'Landing Page', 2, (
                   <>
                     <div>{form.landingTitle}</div>
                     <div>{form.landingShortDescription}</div>
@@ -1162,33 +866,16 @@ export const OnboardClinicModal: React.FC<OnboardClinicModalProps> = ({
                     <div>Enquiry form: {form.enquiryFormEnabled ? 'Enabled' : 'Disabled'}</div>
                   </>
                 ))}
-                {reviewSection('whatsapp', 'WhatsApp', 2, (
+                {reviewSection('whatsapp', 'WhatsApp', 3, (
                   <>
                     <div>Phone Number ID: {form.waPhoneNumberId || 'Not configured'}</div>
                     <div>Status: {form.waConnectionStatus}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <MessageSquare size={14} /> Templates configured
-                    </div>
                   </>
                 ))}
-                {reviewSection('ai', 'AI Configuration', 3, (
+                {reviewSection('ai', 'AI Configuration', 4, (
                   <>
                     <div>{form.receptionistName} · {form.aiTone}</div>
                     <div>{form.greetingMessage}</div>
-                  </>
-                ))}
-                {reviewSection('workflow', 'Clinic Workflow', 4, (
-                  <>
-                    <div>Qualification: {form.qualificationEnabled ? 'On' : 'Off'}</div>
-                    <div>Appointments: {form.appointmentEnabled ? 'On' : 'Off'}</div>
-                    <div>Reminders: {form.reminderHoursBefore}h before · Follow-up: {form.followUpHours}h</div>
-                  </>
-                ))}
-                {reviewSection('staff', 'Admin & Staff', 5, (
-                  <>
-                    {form.staff.map((s) => (
-                      <div key={s.id}>{s.name} · {s.email} · {s.roleLabel}</div>
-                    ))}
                   </>
                 ))}
 

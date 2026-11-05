@@ -68,6 +68,7 @@ export interface Clinic {
   openingTime?: string;
   closingTime?: string;
   tier: SubscriptionTier;
+  packageAssigned?: boolean;
   mrr: number;
   createdAt: string;
   doctorsCount: number;
@@ -81,7 +82,47 @@ export interface Clinic {
 
 export interface ClinicDetail extends Clinic {
   users: PlatformUser[];
+  seats?: {
+    enforced: boolean;
+    planName: string | null;
+    tier: string | null;
+    doctors: { used: number; allowed: number | null };
+    staff: { used: number; allowed: number | null };
+    whatsappNumbers: { used: number; allowed: number | null };
+  };
+  packageUsage?: {
+    enforced: boolean;
+    planName: string | null;
+    tier: string | null;
+    doctors: { used: number; allowed: number | null; note: string };
+    staff: { used: number; allowed: number | null; note: string };
+    whatsappNumbers: { used: number; allowed: number | null; note: string };
+    aiReplies: { used: number; allowed: number | null; note: string };
+    whatsappMessages?: { used: number; lifetime?: number; fromDay: number; toDay: number; monthLabel: string };
+    automations: Array<{ key: string; label: string; running: boolean }>;
+  };
+  addons?: Array<{
+    id: string;
+    type: string;
+    price: number;
+    quantity: number;
+    billing: string;
+    status: string;
+    automationKey?: string | null;
+  }>;
   subscription: ClinicSubscription;
+  subscriptionInvoices?: Array<{
+    id: string;
+    invoiceNumber: string;
+    subtotal?: number;
+    taxAmount?: number;
+    total: number;
+    description?: string;
+    status: string;
+    periodStart: string;
+    periodEnd: string;
+    dueAt?: string | null;
+  }>;
   whatsappConfig: {
     phoneNumber: string;
     wabaId: string;
@@ -101,7 +142,7 @@ export interface ClinicDetail extends Clinic {
     provider: string;
     model: string;
     systemPromptVersion: string;
-    monthlyTokenQuota: number;
+    monthlyTokenQuota: number | null;
     tokensConsumedThisMonth: number;
     customKnowledgeDocsCount: number;
     tone?: string;
@@ -134,6 +175,7 @@ export interface ClinicDetail extends Clinic {
   } | null;
   usageSummary: {
     whatsappConversations: number;
+    aiConversationsLifetime?: number;
     whatsappCost: number;
     aiTokens: number;
     aiCost: number;
@@ -171,6 +213,21 @@ export interface SubscriptionPlan {
   name: string;
   tier: SubscriptionTier;
   priceMonthly: number;
+  regularMonthlyPrice: number;
+  earlyBirdMonthlyPrice: number;
+  regularSetupFee: number;
+  earlyBirdSetupFee: number;
+  doctorsIncluded: number;
+  staffIncluded: number;
+  whatsappNumbersIncluded: number;
+  aiRepliesMonthly: number;
+  modelLevel: 'NORMAL' | 'HIGH_END';
+  conversationMemory: 'NONE' | 'FULL';
+  reportingLevel: 'BASIC' | 'ADVANCED';
+  customAiIncluded: boolean;
+  outboundIncluded: boolean;
+  prioritySupportIncluded: boolean;
+  automationKeys: string[];
   billingCycle: 'MONTHLY' | 'ANNUAL';
   features: string[];
   whatsappConversationsIncluded: number;
@@ -198,9 +255,13 @@ export interface ClinicSubscription {
   currency: string;
   paymentMethodLast4: string;
   paymentMethodBrand: string;
+  earlyBird?: boolean;
+  limitsApply?: boolean;
+  packageMonthly?: number;
+  assigned?: boolean;
 }
 
-export type InvoiceStatus = 'PAID' | 'PENDING' | 'FAILED' | 'REFUNDED';
+export type InvoiceStatus = 'PAID' | 'PENDING' | 'FAILED' | 'REFUNDED' | 'ISSUED' | 'OVERDUE';
 
 export interface SaasInvoice {
   id: string;
@@ -208,6 +269,7 @@ export interface SaasInvoice {
   clinicId: string;
   clinicName: string;
   planName: string;
+  description?: string;
   amount: number;
   taxAmount: number;
   totalAmount: number;
@@ -254,10 +316,10 @@ export interface FailedPaymentIncident {
 export interface ClinicUsageRecord {
   clinicId: string;
   clinicName: string;
-  whatsappIncluded: number;
+  whatsappIncluded: number | null;
   whatsappConsumed: number;
   whatsappOverageCost: number;
-  aiTokensIncluded: number;
+  aiTokensIncluded: number | null;
   aiTokensConsumed: number;
   aiOverageCost: number;
   totalBillableOverage: number;
@@ -295,7 +357,7 @@ export interface WhatsAppMonitorItem {
 }
 
 export interface AiModelStatus {
-  provider: 'GOOGLE';
+  provider: string;
   modelName: string;
   status: 'OPERATIONAL' | 'DEGRADED' | 'OUTAGE';
   latencyMs: number;
@@ -314,6 +376,8 @@ export type JobType =
   | 'APPOINTMENT_REMINDER_DISPATCH'
   | 'OUTBOUND_REMINDER_SCAN'
   | 'OUTBOUND_OUTCOME_SCAN'
+  | 'SUBSCRIPTION_BILL_SCAN'
+  | 'SUBSCRIPTION_BILL_CREATE'
   | 'DATA_RETENTION_CLEANUP';
 
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'STALE';

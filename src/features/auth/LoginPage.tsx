@@ -276,7 +276,7 @@ export const LoginPage: React.FC = () => {
             }}
           >
             <span style={{ color: '#4ade80' }}>💳 Billing Admin</span>
-            <span style={{ fontSize: '10px', color: '#94a3b8' }}>Revenue & subscriptions</span>
+            <span style={{ fontSize: '10px', color: '#94a3b8' }}>Revenue & packages</span>
           </button>
         </div>
       </div>

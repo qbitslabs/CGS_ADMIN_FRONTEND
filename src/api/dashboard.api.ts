@@ -18,12 +18,13 @@ export interface DashboardSummaryData {
     whatsappCost: number;
     aiTokens: number;
     aiCost: number;
+    overviewLoaded: boolean;
   };
   health: {
     database: { status: string; latency: number };
     redisQueue: { status: string; activeWorkers: number; pendingJobs: number };
-    whatsappCloudApi: { status: string; successRate: string };
-    openaiApi: { status: string; latency: number };
+    whatsappCloudApi: { status: string; successRate: string; latency?: number };
+    openaiApi: { status: string; latency: number; model?: string; provider?: string };
   };
   recentActivity: AuditLog[];
 }
@@ -39,16 +40,18 @@ function parseLatencyMs(value: unknown): number {
 
 export const dashboardApi = {
   getSummary: async (): Promise<DashboardSummaryData> => {
-    const [overviewRes, auditRes, diagRes, jobsRes] = await Promise.allSettled([
+    const [overviewRes, auditRes, diagRes, jobsRes, aiUsageRes] = await Promise.allSettled([
       cgs_api.get('/overview'),
       cgs_api.get('/audit-logs?limit=5'),
       cgs_api.get('/support/diagnostics'),
       cgs_api.get('/jobs', { params: { status: 'PENDING', limit: 1 } }),
+      cgs_api.get('/ai/usage/summary?days=30'),
     ]);
 
-    const raw = overviewRes.status === 'fulfilled' ? (overviewRes.value.data?.data || overviewRes.value.data || {}) : {};
+    const overviewLoaded = overviewRes.status === 'fulfilled';
+    const raw = overviewLoaded ? (overviewRes.value.data?.data || overviewRes.value.data || {}) : {};
     const platform = raw.platform || {};
-    const ai = raw.ai || {};
+    const usageRaw = aiUsageRes.status === 'fulfilled' ? (aiUsageRes.value.data?.data || aiUsageRes.value.data || {}) : {};
 
     const rawAudit = auditRes.status === 'fulfilled' ? (auditRes.value.data?.data || auditRes.value.data || []) : [];
     const auditLogs: AuditLog[] = Array.isArray(rawAudit)
@@ -76,13 +79,13 @@ export const dashboardApi = {
     const dbStatus = String(system.database?.status || 'UNKNOWN').toUpperCase();
 
     const totalClinics = platform.totalClinics || 0;
-    const mrr = platform.totalRevenue || (totalClinics * 25000);
+    const mrr = platform.totalRevenue || 0;
 
     return {
       kpi: {
         totalClinics,
         activeClinics: totalClinics,
-        newClinicsThisMonth: totalClinics > 0 ? 1 : 0,
+        newClinicsThisMonth: platform.newClinicsThisMonth || 0,
         mrr,
         activeSubscriptions: totalClinics,
         failedPaymentCount: 0,
@@ -90,9 +93,10 @@ export const dashboardApi = {
         totalLeads: platform.totalLeads || 0,
         totalAppointments: platform.totalAppointments || 0,
         whatsappConversations: platform.whatsappConversations || platform.totalConversations || 0,
-        whatsappCost: platform.whatsappCost || Number((platform.whatsappConversations || 0) * 0.4),
-        aiTokens: ai.total_tokens || 0,
-        aiCost: ai.estimated_cost || 0,
+        whatsappCost: platform.whatsappCost || 0,
+        aiTokens: usageRaw.totalTokens || usageRaw.total_tokens || 0,
+        aiCost: usageRaw.totalCost || usageRaw.estimated_cost || 0,
+        overviewLoaded,
       },
       health: {
         database: {
@@ -106,11 +110,14 @@ export const dashboardApi = {
         },
         whatsappCloudApi: {
           status: waStatus === 'HEALTHY' ? 'HEALTHY' : waStatus || 'UNKNOWN',
-          successRate: waStatus === 'HEALTHY' ? `${Math.max(0, 100 - Math.min(waLatency / 10, 5)).toFixed(1)}%` : 'n/a',
+          successRate: waStatus,
+          latency: waLatency,
         },
         openaiApi: {
           status: aiStatus === 'HEALTHY' ? 'HEALTHY' : aiStatus || 'UNKNOWN',
           latency: aiLatency,
+          model: system.aiService?.model || '',
+          provider: system.aiService?.provider || '',
         },
       },
       recentActivity: auditLogs,

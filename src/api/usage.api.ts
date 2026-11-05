@@ -19,19 +19,19 @@ export const usageApi = {
 
     const platform = overview.platform || {};
     const totalWhatsApp = platform.whatsappConversations || platform.totalConversations || 0;
-    const totalWhatsAppCost = platform.whatsappCost || Number(totalWhatsApp * 0.4);
+    const totalWhatsAppCost = platform.whatsappCost || 0;
     const totalAiTokens = summary.totalTokens || overview.ai?.total_tokens || 0;
     const totalAiCost = summary.totalCost || overview.ai?.estimated_cost || 0;
 
     const clinicsList = Array.isArray(clinicsRaw) ? clinicsRaw : [];
     const clinicsUsage = clinicsList.map((c: any) => {
-      const waIncluded = c.whatsappIncluded || 1000;
+      const waIncluded = c.whatsappIncluded ?? null;
       const waConsumed = c.whatsappConsumed || 0;
-      const waOverage = Math.max(0, waConsumed - waIncluded) * 0.4;
+      const waOverage = waIncluded == null ? 0 : Math.max(0, waConsumed - waIncluded) * Number(c.overageRateWhatsApp || 0);
 
-      const aiIncluded = c.aiTokensIncluded || 1000000;
+      const aiIncluded = c.aiTokensIncluded ?? null;
       const aiConsumed = c.totalTokens || 0;
-      const aiOverage = Math.max(0, (aiConsumed - aiIncluded) / 1000) * 0.15;
+      const aiOverage = aiIncluded == null ? 0 : Math.max(0, (aiConsumed - aiIncluded) / 1000) * Number(c.overageRateAi1k || 0);
 
       return {
         clinicId: c.clinicId,

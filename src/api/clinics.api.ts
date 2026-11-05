@@ -52,4 +52,30 @@ export const clinicsApi = {
     const res = await cgs_api.patch(`/clinics/${clinicId}/primary-doctor`, { userId });
     return res.data?.data || res.data;
   },
+
+  assignPlan: async (
+    clinicId: string,
+    payload: { planId: string; status: string; earlyBird: boolean }
+  ): Promise<ClinicDetail> => {
+    const res = await cgs_api.patch(`/clinics/${clinicId}/subscription`, payload);
+    return res.data?.data || res.data;
+  },
+
+  recordAddon: async (
+    clinicId: string,
+    payload: { type: string; quantity?: number; automationKey?: string }
+  ): Promise<ClinicDetail> => {
+    const res = await cgs_api.post(`/clinics/${clinicId}/addons`, payload);
+    return res.data?.data || res.data;
+  },
+
+  confirmAddon: async (clinicId: string, addonId: string): Promise<ClinicDetail> => {
+    const res = await cgs_api.post(`/clinics/${clinicId}/addons/${addonId}/confirm`);
+    return res.data?.data || res.data;
+  },
+
+  removeAddon: async (clinicId: string, addonId: string): Promise<ClinicDetail> => {
+    const res = await cgs_api.delete(`/clinics/${clinicId}/addons/${addonId}`);
+    return res.data?.data || res.data;
+  },
 };

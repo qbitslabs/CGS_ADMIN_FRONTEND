@@ -9,6 +9,8 @@ import {
   DollarSign,
   AlertTriangle,
   Download,
+  Eye,
+  Plus,
   RotateCcw,
   CheckCircle2,
   TrendingUp,
@@ -25,9 +27,10 @@ import { Card } from '../../components/ui/Card';
 import { StatCard } from '../../components/ui/StatCard';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { DataTable, Column } from '../../components/tables/DataTable';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
-import { downloadSaasReceiptHtml } from './DownloadSaasReceipt';
+import { Modal } from '../../components/ui/Modal';
 import { useToast, usePermissions } from '../../hooks';
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters';
 import { ExportExcelButton } from '../../components/ui/ExportExcelButton';
@@ -35,6 +38,9 @@ import { ExportExcelButton } from '../../components/ui/ExportExcelButton';
 export const BillingOverviewPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedFailedIncident, setSelectedFailedIncident] = useState<FailedPaymentIncident | null>(null);
+  const [previewInvoice, setPreviewInvoice] = useState<SaasInvoice | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [oneTime, setOneTime] = useState({ clinicId: '', description: '', amount: '', dueDate: '' });
 
   const queryClient = useQueryClient();
   const { success, error: toastError } = useToast();
@@ -78,14 +84,41 @@ export const BillingOverviewPage: React.FC = () => {
     },
   });
 
+  const createInvoiceMutation = useMutation({
+    mutationFn: () =>
+      billingApi.createOneTimeInvoice({
+        clinicId: oneTime.clinicId,
+        description: oneTime.description.trim(),
+        amount: Number(oneTime.amount),
+        dueDate: oneTime.dueDate || undefined,
+      }),
+    onSuccess: (invoice) => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'billing', 'invoices'] });
+      success('Invoice created', `${invoice.invoiceNumber} for ${invoice.clinicName}`);
+      setCreateOpen(false);
+      setOneTime({ clinicId: '', description: '', amount: '', dueDate: '' });
+      setActiveTab('invoices');
+    },
+    onError: (err: Error) => {
+      toastError('Invoice not created', err.message);
+    },
+  });
+
+  const taxable = Number(oneTime.amount);
+  const gstAmount = Number.isFinite(taxable) && taxable > 0 ? Math.round(taxable * 0.18 * 100) / 100 : 0;
+  const payable = Number.isFinite(taxable) && taxable > 0 ? Math.round((taxable + gstAmount) * 100) / 100 : 0;
+  const clinicOptions = subscriptions.filter(
+    (sub, index, list) => list.findIndex((item) => item.clinicId === sub.clinicId) === index
+  );
+
   const totalMrr = subscriptions
     .filter((s) => s.status === 'ACTIVE')
     .reduce((sum, s) => sum + s.amount, 0);
 
   const tabs = [
     { id: 'overview', label: 'Revenue Overview', icon: <TrendingUp size={15} /> },
-    { id: 'plans', label: 'Subscription Plans', icon: <Layers size={15} />, count: plans.length },
-    { id: 'subscriptions', label: 'Active Subscriptions', icon: <CreditCard size={15} />, count: subscriptions.length },
+    { id: 'plans', label: 'Packages', icon: <Layers size={15} />, count: plans.length },
+    { id: 'subscriptions', label: 'Active Packages', icon: <CreditCard size={15} />, count: subscriptions.length },
     { id: 'invoices', label: 'CGS SaaS Invoices', icon: <FileText size={15} />, count: invoices.length },
     { id: 'payments', label: 'Payments Ledger', icon: <DollarSign size={15} /> },
     {
@@ -101,6 +134,7 @@ export const BillingOverviewPage: React.FC = () => {
     {
       key: 'invoiceNumber',
       header: 'Invoice #',
+      width: '15%',
       render: (row) => (
         <strong style={{ color: 'var(--c-primary-700)', fontFamily: 'var(--font-mono)' }}>
           {row.invoiceNumber}
@@ -109,31 +143,38 @@ export const BillingOverviewPage: React.FC = () => {
     },
     {
       key: 'clinicName',
-      header: 'Clinic Tenant',
+      header: 'Clinic',
+      width: '18%',
+      wrap: true,
       render: (row) => <span style={{ fontWeight: 600 }}>{row.clinicName}</span>,
     },
     {
       key: 'planName',
-      header: 'Plan Tier',
+      header: 'Plan',
+      width: '18%',
+      wrap: true,
       render: (row) => <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{row.planName}</span>,
     },
     {
       key: 'totalAmount',
-      header: 'Total Amount (incl GST)',
+      header: 'Total',
+      width: '12%',
       render: (row) => <strong>{formatCurrency(row.totalAmount)}</strong>,
     },
     {
       key: 'status',
       header: 'Status',
+      width: '12%',
       render: (row) => (
-        <Badge variant={row.status === 'PAID' ? 'success' : row.status === 'FAILED' ? 'error' : 'warning'}>
+        <Badge variant={row.status === 'PAID' ? 'success' : row.status === 'FAILED' || row.status === 'OVERDUE' ? 'error' : 'warning'}>
           {row.status}
         </Badge>
       ),
     },
     {
       key: 'dueDate',
-      header: 'Due / Paid Date',
+      header: 'Due',
+      width: '13%',
       render: (row) => (
         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
           {row.paidAt ? formatDate(row.paidAt) : formatDate(row.dueDate)}
@@ -142,20 +183,40 @@ export const BillingOverviewPage: React.FC = () => {
     },
     {
       key: 'download',
-      header: 'Download Bill',
+      header: '',
+      width: '12%',
       align: 'right',
       render: (row) => (
-        <Button
-          variant="outline"
-          size="sm"
-          leftIcon={<Download size={13} />}
-          onClick={(e) => {
-            e.stopPropagation();
-            downloadSaasReceiptHtml(row);
-          }}
-        >
-          Download PDF
-        </Button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '2px' }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Overview"
+            aria-label="Overview"
+            style={{ padding: 2, width: 26, height: 26 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setPreviewInvoice(row);
+            }}
+          >
+            <Eye size={15} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Download PDF"
+            aria-label="Download PDF"
+            style={{ padding: 2, width: 26, height: 26 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              billingApi.downloadInvoicePdf(row.id, row.invoiceNumber).catch((err) => {
+                toastError(err instanceof Error ? err.message : 'Could not download the invoice.');
+              });
+            }}
+          >
+            <Download size={15} />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -208,13 +269,22 @@ export const BillingOverviewPage: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header */}
-      <div>
-        <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-          Platform Subscriptions & Billing
-        </h1>
-        <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
-          CGS multi-tenant subscription tiers, auto-debit invoices, payments ledger, and dunning retry management.
-        </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+        <div>
+          <h1 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            Packages & Billing
+          </h1>
+          <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '2px' }}>
+            Clinic packages, monthly bills, payments ledger, and dunning retry management.
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          leftIcon={<Plus size={16} />}
+          onClick={() => setCreateOpen(true)}
+        >
+          Create invoice
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -234,9 +304,9 @@ export const BillingOverviewPage: React.FC = () => {
             />
 
             <StatCard
-              title="Active Enterprise Tiers (₹25k)"
+              title="Active Scale packages"
               value={subscriptions.filter((s) => s.tier === 'ENTERPRISE').length}
-              subtitle="High-growth dental chains"
+              subtitle="₹18,000 / month"
               icon={<Zap size={22} />}
               iconBg="var(--c-primary-50)"
               iconColor="var(--c-primary-600)"
@@ -277,6 +347,7 @@ export const BillingOverviewPage: React.FC = () => {
           >
             <DataTable
               exportName="recent-saas-invoices"
+              fit
               columns={invoiceColumns}
               data={invoices.slice(0, 5)}
               total={invoices.length}
@@ -296,30 +367,41 @@ export const BillingOverviewPage: React.FC = () => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span>{plan.name}</span>
                   <Badge variant={plan.tier === 'ENTERPRISE' ? 'purple' : plan.tier === 'GROWTH' ? 'info' : 'neutral'}>
-                    {plan.tier}
+                    {plan.tier === 'STARTER' ? 'Essential' : plan.tier === 'GROWTH' ? 'Growth' : plan.tier === 'ENTERPRISE' ? 'Scale' : 'Custom'}
                   </Badge>
                 </div>
               }
-              subtitle={`${plan.activeSubscriptionsCount} Active Clinics Subscribed`}
+              subtitle={`${plan.activeSubscriptionsCount} clinics on this package`}
             >
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  {formatCurrency(plan.priceMonthly)}{' '}
+                  {formatCurrency(plan.regularMonthlyPrice || plan.priceMonthly)}{' '}
                   <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)' }}>/ month</span>
+                </div>
+                <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginTop: '-8px' }}>
+                  Early Bird {formatCurrency(plan.earlyBirdMonthlyPrice || 0)} / month · Setup {formatCurrency(plan.regularSetupFee || 0)}
                 </div>
 
                 <div style={{ padding: '12px', backgroundColor: 'var(--c-slate-50)', borderRadius: 'var(--radius-md)', fontSize: '12.5px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>WhatsApp Included:</span>
-                    <strong>{plan.whatsappConversationsIncluded} free chats</strong>
+                    <span style={{ color: 'var(--text-muted)' }}>Doctors</span>
+                    <strong>{plan.doctorsIncluded}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>AI Tokens Included:</span>
-                    <strong>{plan.aiTokensIncluded.toLocaleString()} tokens</strong>
+                    <span style={{ color: 'var(--text-muted)' }}>Staff</span>
+                    <strong>{plan.staffIncluded}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>WhatsApp Overage Rate:</span>
-                    <strong>₹{plan.overageRateWhatsApp.toFixed(2)} / chat</strong>
+                    <span style={{ color: 'var(--text-muted)' }}>WhatsApp numbers</span>
+                    <strong>{plan.whatsappNumbersIncluded}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>AI replies / month</span>
+                    <strong>{Number(plan.aiRepliesMonthly || 0).toLocaleString('en-IN')}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Model / memory</span>
+                    <strong>{plan.modelLevel === 'HIGH_END' ? 'High-end' : 'Normal'} · {plan.conversationMemory === 'FULL' ? 'Full' : 'None'}</strong>
                   </div>
                 </div>
 
@@ -343,8 +425,8 @@ export const BillingOverviewPage: React.FC = () => {
       {/* Tab 3: Active Subscriptions */}
       {activeTab === 'subscriptions' && (
         <Card
-          title="Active Clinic Subscriptions"
-          subtitle="Live recurring billing status across dental tenants"
+          title="Active packages"
+          subtitle="Live package status across clinics"
           action={
             <ExportExcelButton
               filename="clinic-subscriptions"
@@ -366,7 +448,7 @@ export const BillingOverviewPage: React.FC = () => {
               <thead>
                 <tr>
                   <th>Clinic</th>
-                  <th>Plan Tier</th>
+                  <th>Package</th>
                   <th>Monthly Price</th>
                   <th>Status</th>
                   <th>Current Period</th>
@@ -407,6 +489,7 @@ export const BillingOverviewPage: React.FC = () => {
         <Card title="CGS Platform Invoices Ledger" subtitle="Official downloadable SaaS tax bills (strictly platform billing, not patient bills)">
           <DataTable
             exportName="saas-invoices"
+            fit
             columns={invoiceColumns}
             data={invoices}
             total={invoices.length}
@@ -518,6 +601,120 @@ export const BillingOverviewPage: React.FC = () => {
           confirmLabel="Execute Charge Retry"
         />
       )}
+
+      <Modal
+        isOpen={!!previewInvoice}
+        onClose={() => setPreviewInvoice(null)}
+        title={previewInvoice ? previewInvoice.invoiceNumber : 'Invoice'}
+        subtitle={previewInvoice?.clinicName}
+        footer={
+          previewInvoice ? (
+            <Button
+              variant="primary"
+              leftIcon={<Download size={14} />}
+              onClick={() => {
+                billingApi.downloadInvoicePdf(previewInvoice.id, previewInvoice.invoiceNumber).catch((err) => {
+                  toastError(err instanceof Error ? err.message : 'Could not download the invoice.');
+                });
+              }}
+            >
+              Download PDF
+            </Button>
+          ) : null
+        }
+      >
+        {previewInvoice && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', fontSize: '13.5px' }}>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Description</div>
+              <strong>{previewInvoice.description || previewInvoice.planName}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Status</div>
+              <strong>{previewInvoice.status}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Period</div>
+              <strong>{formatDate(previewInvoice.billingPeriodStart)} – {formatDate(previewInvoice.billingPeriodEnd)}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Due</div>
+              <strong>{formatDate(previewInvoice.dueDate)}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Taxable value</div>
+              <strong>{formatCurrency(previewInvoice.amount)}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>GST 18%</div>
+              <strong>{formatCurrency(previewInvoice.taxAmount)}</strong>
+            </div>
+            <div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Total payable</div>
+              <strong>{formatCurrency(previewInvoice.totalAmount)}</strong>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Create invoice"
+        subtitle="One-time payment. GST at 18% is added to the amount you enter."
+        footer={
+          <Button
+            variant="primary"
+            isLoading={createInvoiceMutation.isPending}
+            onClick={() => createInvoiceMutation.mutate()}
+          >
+            Create invoice
+          </Button>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '13px', fontWeight: 600 }}>
+            Clinic
+            <select
+              value={oneTime.clinicId}
+              onChange={(e) => setOneTime((current) => ({ ...current, clinicId: e.target.value }))}
+              style={{ padding: '8px 10px', borderRadius: '6px', border: '1px solid var(--border-color, #cbd5e1)', fontSize: '14px' }}
+            >
+              <option value="">Select a clinic</option>
+              {clinicOptions.map((sub) => (
+                <option key={sub.clinicId} value={sub.clinicId}>{sub.clinicName}</option>
+              ))}
+            </select>
+          </label>
+          <Input
+            label="What is this payment for?"
+            required
+            value={oneTime.description}
+            onChange={(e) => setOneTime((current) => ({ ...current, description: e.target.value }))}
+            placeholder="Setup fee, extra number, on-site visit"
+          />
+          <Input
+            label="Amount before GST"
+            required
+            type="number"
+            min="1"
+            value={oneTime.amount}
+            onChange={(e) => setOneTime((current) => ({ ...current, amount: e.target.value }))}
+            placeholder="10000"
+          />
+          <Input
+            label="Due date"
+            type="date"
+            value={oneTime.dueDate}
+            onChange={(e) => setOneTime((current) => ({ ...current, dueDate: e.target.value }))}
+          />
+          <div style={{ padding: '12px', background: 'var(--c-slate-50)', borderRadius: '8px', fontSize: '13.5px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Taxable value</span><strong>{formatCurrency(taxable || 0)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>GST 18%</span><strong>{formatCurrency(gstAmount)}</strong></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Total payable</span><strong>{formatCurrency(payable)}</strong></div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
